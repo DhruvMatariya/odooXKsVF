@@ -122,4 +122,40 @@ export const orderController = {
       data: toOrderResponseDTO(result.order),
     });
   },
+
+  async scheduleReturnSlot(req, res) {
+    const customerUserId = req.user.sub;
+    const order = await orderService.scheduleReturnSlot(req.validated.params.id, customerUserId, req.validated.body.returnSlotId);
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Return slot scheduled',
+      data: toOrderResponseDTO(order),
+    });
+  },
+
+  async markReturned(req, res) {
+    const vendorUserId = req.user.sub;
+    const order = await orderService.markReturned(req.validated.params.id, vendorUserId, req.validated.body.actualReturnTime);
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Order marked as returned',
+      data: toOrderResponseDTO(order),
+    });
+  },
+
+  async inspectOrder(req, res) {
+    const vendorUserId = req.user.sub;
+    const result = await orderService.inspectOrder(req.validated.params.id, vendorUserId, req.validated.body);
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Inspection completed',
+      data: {
+        order: toOrderResponseDTO(result.order),
+        inspectionReport: result.inspectionReport,
+        latePenalty: result.latePenalty,
+        totalDeduction: result.totalDeduction,
+        refundAmount: result.refundAmount,
+      },
+    });
+  },
 };

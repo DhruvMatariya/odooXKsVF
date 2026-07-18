@@ -24,6 +24,9 @@ import {
   dispatchOrder,
   confirmDelivery,
   resolveReplacement,
+  scheduleReturnSlot,
+  markReturned,
+  inspectOrder,
 } from '../controllers/order.controller.js';
 
 const router = express.Router();
@@ -38,17 +41,11 @@ router.post('/orders/:id/confirm-delivery', authenticateUser, authorizeRoles('cu
 
 router.post('/orders/:id/resolve-replacement', authenticateUser, authorizeRoles('vendor'), validate(resolveReplacementSchema), resolveReplacement);
 
-router.post('/orders/:id/return-slot', authenticateUser, authorizeRoles('customer'), validate(returnSlotSchema), async (req, res) => {
-  res.status(501).json({ success: false, error: { code: 'NOT_IMPLEMENTED', message: 'Return slot not implemented yet' } });
-});
+router.post('/orders/:id/return-slot', authenticateUser, authorizeRoles('customer'), validate(returnSlotSchema), scheduleReturnSlot);
 
-router.post('/orders/:id/mark-returned', authenticateUser, authorizeRoles('vendor'), validate(markReturnedSchema), async (req, res) => {
-  res.status(501).json({ success: false, error: { code: 'NOT_IMPLEMENTED', message: 'Mark returned not implemented yet' } });
-});
+router.post('/orders/:id/mark-returned', authenticateUser, authorizeRoles('vendor'), validate(markReturnedSchema), markReturned);
 
-router.post('/orders/:id/inspect', authenticateUser, authorizeRoles('vendor'), validate(inspectSchema), async (req, res) => {
-  res.status(501).json({ success: false, error: { code: 'NOT_IMPLEMENTED', message: 'Inspect not implemented yet' } });
-});
+router.post('/orders/:id/inspect', authenticateUser, authorizeRoles('vendor'), validate(inspectSchema), inspectOrder);
 
 router.post('/orders/:id/report-issue', authenticateUser, authorizeRoles('customer'), validate(reportIssueSchema), async (req, res) => {
   res.status(501).json({ success: false, error: { code: 'NOT_IMPLEMENTED', message: 'Report issue not implemented yet' } });

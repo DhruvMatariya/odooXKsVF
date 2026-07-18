@@ -5,6 +5,7 @@ import { HTTP_STATUS } from '../config/constant.js';
 import { MESSAGES } from '../config/messages.js';
 import env from '../config/env.js';
 import { notificationQueue, JOB_NAMES } from '../queues/notificationQueue.js';
+import { calculateLateFee } from '../utils/lateFee.js';
 
 const stripe = new Stripe(env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
 
@@ -673,6 +674,254 @@ export const orderService = {
         await client.query('COMMIT');
         return { order: toOrderDTO({ ...order, status: 'REJECTED_AT_DELIVERY' }), message: 'Refund processed for replacement' };
       }
+    } catch (err) {
+      await client.query('ROLLBACK');
+      if (err instanceof ApiError) throw err;
+      throw new ApiError(HTTP_STATUS.INTERNAL_SERVER_ERROR, MESSAGES.SERVER.INTERNAL_ERROR);
+    } finally {
+      client.release();
+    }
+  },
+
+  async scheduleReturnSlot(orderId, customerUserId, returnSlotId) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Lock order row
+      const orderResult = await client.query(
+        `SELECT * FROM orders WHERE id = $1 AND customer_user_id = $2 FOR UPDATE`,
+        [orderId, customerUserId]
+      );
+      if (orderResult.rows.length === 0) {
+        throw new ApiError(HTTP_STATUS.NOT_FOUND, MESSAGES.ORDERS.ORDER_NOT_FOUND, 'ORDER_NOT_FOUND');
+      }
+      const order = orderResult.rows[0];
+
+      if (order.status !== 'ACTIVE_RENTAL') {
+        throw new ApiError(HTTP_STATUS.CONFLICT, MESSAGES.ORDERS.INVALID_STATE_TRANSITION, 'INVALID_STATE_TRANSITION');
+      }
+
+      // Lock return_slots row
+      const slotResult = await client.query(
+        `SELECT * FROM return_slots WHERE id = $1 FOR UPDATE`,
+        [returnSlotId]
+      );
+      if (slotResult.rows.length === 0) {
+        throw new ApiError(HTTP_STATUS.NOT_FOUND, 'Return slot not found', 'RETURN_SLOT_NOT_FOUND');
+      }
+      const slot = slotResult.rows[0];
+
+      if (slot.vendor_user_id !== order.vendor_user_id) {
+        throw new ApiError(HTTP_STATUS.FORBIDDEN, 'Return slot does not belong to order vendor', 'FORBIDDEN');
+      }
+
+      if (slot.booked_count >= slot.capacity) {
+        throw new ApiError(HTTP_STATUS.CONFLICT, 'Return slot is full', 'SLOT_FULL');
+      }
+
+      // Increment booked_count
+      await client.query(
+        `UPDATE return_slots SET booked_count = booked_count + 1 WHERE id = $1`,
+        [returnSlotId]
+      );
+
+      // Update order
+      await client.query(
+        `UPDATE orders SET return_slot_id = $1, status = 'RETURN_SCHEDULED', updated_at = NOW() WHERE id = $2`,
+        [returnSlotId, orderId]
+      );
+
+      await client.query(
+        `INSERT INTO order_events (order_id, from_status, to_status, actor_role, actor_user_id, note)
+         VALUES ($1, 'ACTIVE_RENTAL', 'RETURN_SCHEDULED', 'CUSTOMER', $2, 'Return slot scheduled')`,
+        [orderId, customerUserId]
+      );
+
+      await client.query('COMMIT');
+      return toOrderDTO({ ...order, status: 'RETURN_SCHEDULED', return_slot_id: returnSlotId });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      if (err instanceof ApiError) throw err;
+      throw new ApiError(HTTP_STATUS.INTERNAL_SERVER_ERROR, MESSAGES.SERVER.INTERNAL_ERROR);
+    } finally {
+      client.release();
+    }
+  },
+
+  async markReturned(orderId, vendorUserId, actualReturnTime) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const orderResult = await client.query(
+        `SELECT * FROM orders WHERE id = $1 AND vendor_user_id = $2 FOR UPDATE`,
+        [orderId, vendorUserId]
+      );
+      if (orderResult.rows.length === 0) {
+        throw new ApiError(HTTP_STATUS.NOT_FOUND, MESSAGES.ORDERS.ORDER_NOT_FOUND, 'ORDER_NOT_FOUND');
+      }
+      const order = orderResult.rows[0];
+
+      if (order.status !== 'RETURN_SCHEDULED') {
+        throw new ApiError(HTTP_STATUS.CONFLICT, MESSAGES.ORDERS.INVALID_STATE_TRANSITION, 'INVALID_STATE_TRANSITION');
+      }
+
+      const returnTime = actualReturnTime ? new Date(actualReturnTime) : new Date();
+
+      await client.query(
+        `UPDATE orders SET status = 'RETURNED_PENDING_INSPECTION', actual_return_time = $1, updated_at = NOW() WHERE id = $2`,
+        [returnTime, orderId]
+      );
+
+      await client.query(
+        `INSERT INTO order_events (order_id, from_status, to_status, actor_role, actor_user_id, note)
+         VALUES ($1, 'RETURN_SCHEDULED', 'RETURNED_PENDING_INSPECTION', 'VENDOR', $2, 'Item marked as returned')`,
+        [orderId, vendorUserId]
+      );
+
+      await client.query('COMMIT');
+      return toOrderDTO({ ...order, status: 'RETURNED_PENDING_INSPECTION', actual_return_time: returnTime });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      if (err instanceof ApiError) throw err;
+      throw new ApiError(HTTP_STATUS.INTERNAL_SERVER_ERROR, MESSAGES.SERVER.INTERNAL_ERROR);
+    } finally {
+      client.release();
+    }
+  },
+
+  async inspectOrder(orderId, vendorUserId, data) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const orderResult = await client.query(
+        `SELECT * FROM orders WHERE id = $1 AND vendor_user_id = $2 FOR UPDATE`,
+        [orderId, vendorUserId]
+      );
+      if (orderResult.rows.length === 0) {
+        throw new ApiError(HTTP_STATUS.NOT_FOUND, MESSAGES.ORDERS.ORDER_NOT_FOUND, 'ORDER_NOT_FOUND');
+      }
+      const order = orderResult.rows[0];
+
+      if (order.status !== 'RETURNED_PENDING_INSPECTION') {
+        throw new ApiError(HTTP_STATUS.CONFLICT, MESSAGES.ORDERS.INVALID_STATE_TRANSITION, 'INVALID_STATE_TRANSITION');
+      }
+
+      // Fetch deposit
+      const depositResult = await client.query(
+        `SELECT * FROM deposits WHERE order_id = $1`,
+        [orderId]
+      );
+      if (depositResult.rows.length === 0) {
+        throw new ApiError(HTTP_STATUS.NOT_FOUND, 'Deposit not found for order', 'DEPOSIT_NOT_FOUND');
+      }
+      const deposit = depositResult.rows[0];
+
+      // Fetch late fee rule for vendor
+      const lfrResult = await client.query(
+        `SELECT * FROM late_fee_rules WHERE vendor_user_id = $1`,
+        [order.vendor_user_id]
+      );
+      const lateFeeRule = lfrResult.rows[0] || { gracePeriodHours: 0, rateType: 'HOURLY', rateAmount: 0, maxCap: 0 };
+
+      // Compute late fee
+      const { latePenalty, totalDeduction, refundAmount, lateByMinutes } = calculateLateFee(
+        lateFeeRule,
+        order.actual_return_time,
+        order.rental_period_end,
+        deposit.amount_held,
+        data.damageDeductionAmount
+      );
+
+      // Insert inspection_reports
+      await client.query(
+        `INSERT INTO inspection_reports (order_id, condition_notes, damage_found, photos, late_by_minutes, penalty_amount, inspected_by, inspected_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
+        [
+          orderId,
+          data.conditionNotes ?? '',
+          data.damageFound,
+          JSON.stringify(data.photos ?? []),
+          lateByMinutes,
+          totalDeduction,
+          vendorUserId,
+        ]
+      );
+
+      // Update deposit
+      const newDepositStatus = totalDeduction === 0 ? 'REFUNDED' : 'PARTIALLY_DEDUCTED';
+      await client.query(
+        `UPDATE deposits SET status = $1, deduction_amount = $2, refund_amount = $3, settled_at = NOW() WHERE order_id = $4`,
+        [newDepositStatus, totalDeduction, refundAmount, orderId]
+      );
+
+      // Stripe refund for deposit if refundAmount > 0
+      if (refundAmount > 0) {
+        // Find deposit payment intent
+        const paymentResult = await client.query(
+          `SELECT stripe_payment_intent_id FROM payments WHERE order_id = $1 AND type = 'DEPOSIT'`,
+          [orderId]
+        );
+        if (paymentResult.rows.length > 0) {
+          const depositPi = paymentResult.rows[0].stripe_payment_intent_id;
+          try {
+            await stripe.refunds.create({
+              payment_intent: depositPi,
+              amount: refundAmount,
+              reason: 'requested_by_customer',
+            });
+          } catch (stripeErr) {
+            await client.query('ROLLBACK');
+            throw new ApiError(HTTP_STATUS.BAD_GATEWAY, `Stripe refund failed for deposit: ${stripeErr.message}`, 'PAYMENT_FAILED');
+          }
+        }
+      }
+
+      // Inventory transition
+      if (data.damageFound) {
+        await client.query(
+          `UPDATE inventory SET rented = rented - $1, maintenance = maintenance + $1 WHERE product_id = $2`,
+          [order.quantity, order.product_id]
+        );
+      } else {
+        await client.query(
+          `UPDATE inventory SET rented = rented - $1, available = available + $1 WHERE product_id = $2`,
+          [order.quantity, order.product_id]
+        );
+      }
+
+      // Order status to COMPLETED (terminal)
+      await client.query(
+        `UPDATE orders SET status = 'COMPLETED', updated_at = NOW() WHERE id = $1`,
+        [orderId]
+      );
+
+      // order_events with computation note
+      const note = `Inspection completed. Late by ${lateByMinutes} min (grace ${lateFeeRule.gracePeriodHours}h). Late penalty: ${latePenalty}. Damage deduction: ${data.damageDeductionAmount}. Total deduction: ${totalDeduction}. Refund: ${refundAmount}. Damage found: ${data.damageFound}.`;
+      await client.query(
+        `INSERT INTO order_events (order_id, from_status, to_status, actor_role, actor_user_id, note)
+         VALUES ($1, 'RETURNED_PENDING_INSPECTION', 'COMPLETED', 'VENDOR', $2, $3)`,
+        [orderId, vendorUserId, note]
+      );
+
+      await notificationQueue.add(JOB_NAMES.INSPECTION_COMPLETE_EMAIL, { orderId, vendorUserId, totalDeduction, refundAmount });
+
+      await client.query('COMMIT');
+
+      // Return order DTO plus inspection details
+      const inspection = {
+        damageFound: data.damageFound,
+        conditionNotes: data.conditionNotes,
+        photos: data.photos,
+        damageDeductionAmount: data.damageDeductionAmount,
+        lateByMinutes,
+        latePenalty,
+        totalDeduction,
+        refundAmount,
+      };
+      return { order: toOrderDTO({ ...order, status: 'COMPLETED' }), inspection };
     } catch (err) {
       await client.query('ROLLBACK');
       if (err instanceof ApiError) throw err;

@@ -193,11 +193,14 @@ export function LandingPage() {
                 The rental platform<br />built by operators.
               </h2>
               <p style={{ fontSize: '16px', color: t.textMuted, lineHeight: 1.7, marginBottom: '24px' }}>
-                Rentsure was built to solve a real problem — managing rentals, deposits, and returns across dozens of products is chaotic without the right tools. We've built the infrastructure to make it simple, transparent, and scalable.
+               Managing rentals, deposits, and returns across dozens of products is chaotic without the right tools. Rentsure is the infrastructure that makes it simple, transparent, and scalable.
               </p>
-              <p style={{ fontSize: '16px', color: t.textMuted, lineHeight: 1.7, marginBottom: '32px' }}>
-                Our platform connects customers and vendors with an end-to-end order lifecycle, automated deposit handling via Stripe, and real-time inventory tracking — all built on a strict, auditable contract.
+              <p style={{ fontSize: '16px', color: t.textMuted, lineHeight: 1.7, marginBottom: '24px' }}>
+               One end-to-end order lifecycle connects customers and vendors — deposits are held and refunded automatically via Stripe, and late fees are calculated the instant an item is returned.
               </p>
+
+
+
               {['Full order audit trail via order events', 'Stripe-powered deposit hold & refund', 'BullMQ background jobs for reminders', 'Socket.IO for real-time dashboard updates'].map(item => (
                 <div key={item} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
                   <CheckCircle size={16} color={t.accent} />

@@ -20,7 +20,7 @@ export function LateFeeRules() {
   }
 
   return (
-    <div style={{ maxWidth: '480px' }}>
+    <div style={{ width: '100%' }}>
       <h1 style={{ color: '#344C3D', fontWeight: 700, fontSize: '22px', letterSpacing: '-0.02em', marginBottom: '6px' }}>Late Fee Rules</h1>
       <p style={{ color: '#738A6E', fontSize: '14px', marginBottom: '24px' }}>Define how late return fees are calculated for your rentals.</p>
 

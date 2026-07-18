@@ -35,7 +35,7 @@ export function AddEditProduct() {
   }
 
   return (
-    <div style={{ maxWidth: '640px' }}>
+    <div style={{ width: '100%' }}>
       <button onClick={() => navigate(-1)} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#738A6E', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', marginBottom: '20px', padding: 0 }}>
         <ArrowLeft size={15} /> Back to products
       </button>

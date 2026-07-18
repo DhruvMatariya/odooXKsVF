@@ -37,7 +37,7 @@ export function AddOfflineOrder() {
   }
 
   return (
-    <div style={{ maxWidth: '600px' }}>
+    <div style={{ maxWidth: '600px', margin: '0 auto' }}>
       <button onClick={() => navigate(-1)} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#738A6E', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', marginBottom: '20px', padding: 0 }}>
         <ArrowLeft size={15} /> Back to orders
       </button>

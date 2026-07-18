@@ -90,12 +90,12 @@ export function Register() {
   // Step 2 — fill details for chosen role
   return (
     <div>
-      <button
+      {/* <button
         onClick={() => setRole(null)}
         style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#738A6E', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', marginBottom: '20px', padding: 0 }}
       >
         ← Back
-      </button>
+      </button> */}
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginBottom: '6px' }}>
         <h2 style={{ color: '#344C3D', fontWeight: 700, fontSize: '22px', letterSpacing: '-0.02em' }}>

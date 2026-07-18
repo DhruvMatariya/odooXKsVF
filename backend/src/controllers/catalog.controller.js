@@ -10,8 +10,8 @@ const formatProductResponse = (product) => ({
   brand: product.brand,
   manufacturer: product.manufacturer,
   status: product.status,
-  thumbnail: product.thumbnail_url ? { url: product.thumbnail_url } : null,
-  images: (product.images || []).map((url, index) => ({ id: url, url, displayOrder: index })),
+  thumbnail: product.thumbnail || null,
+  images: product.images || [],
   createdAt: product.created_at,
 });
 
@@ -69,7 +69,7 @@ export const catalogController = {
     res.status(HTTP_STATUS.OK).json({
       success: true,
       message: MESSAGES.CATALOG.PRODUCT_FETCHED,
-      data: product,
+      data: formatProductResponse(product),
     });
   },
 

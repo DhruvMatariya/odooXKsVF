@@ -22,7 +22,7 @@ export function ProductList() {
     setLoading(true);
     try {
       const res = await listProducts({ page, limit: PAGE_SIZE });
-      if (res.data) {
+      if (res.data?.data) {
         setProducts(res.data.data || []);
         setTotal(res.data.meta?.total || 0);
       }

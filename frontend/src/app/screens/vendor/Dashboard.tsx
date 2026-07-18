@@ -1,31 +1,79 @@
-import { DASHBOARD_STATS } from '../../lib/mockData';
+import { useState, useEffect } from 'react';
 import { formatPrice } from '../../lib/utils';
 import { TrendingUp, Clock, AlertTriangle, ArrowUpRight, DollarSign, ArrowRight } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { Link } from 'react-router';
-
-const REVENUE_DATA = [
-  { name: 'Mon', revenue: 4000 },
-  { name: 'Tue', revenue: 3000 },
-  { name: 'Wed', revenue: 5000 },
-  { name: 'Thu', revenue: 2780 },
-  { name: 'Fri', revenue: 6890 },
-  { name: 'Sat', revenue: 8390 },
-  { name: 'Sun', revenue: 9490 },
-];
-
-const ORDER_STATUS_DATA = [
-  { name: 'Pending', count: 12 },
-  { name: 'Active', count: 19 },
-  { name: 'Disputed', count: 2 },
-  { name: 'Completed', count: 45 },
-  { name: 'Cancelled', count: 5 },
-];
+import { toast } from 'sonner';
+import { getVendorDashboardStats } from '../../lib/api';
 
 const COLORS = ['#344C3D', '#738A6E', '#C97B3D', '#8EA58C', '#BFCFBB'];
 
+const FALLBACK_REVENUE_DATA = [
+  { name: 'Mon', revenue: 0 },
+  { name: 'Tue', revenue: 0 },
+  { name: 'Wed', revenue: 0 },
+  { name: 'Thu', revenue: 0 },
+  { name: 'Fri', revenue: 0 },
+  { name: 'Sat', revenue: 0 },
+  { name: 'Sun', revenue: 0 },
+];
+
+const FALLBACK_STATUS_DATA = [
+  { name: 'Pending', count: 0 },
+  { name: 'Active', count: 0 },
+  { name: 'Disputed', count: 0 },
+  { name: 'Completed', count: 0 },
+  { name: 'Cancelled', count: 0 },
+];
+
 export function Dashboard() {
-  const s = DASHBOARD_STATS;
+  const [stats, setStats] = useState({
+    revenue: 0,
+    activeRentals: 0,
+    dueToday: 0,
+    overdue: 0,
+    upcomingPickups: 0,
+    newRequests: 0,
+    revenueChart: FALLBACK_REVENUE_DATA,
+    statusDistribution: FALLBACK_STATUS_DATA,
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadStats();
+  }, []);
+
+  async function loadStats() {
+    try {
+      const res = await getVendorDashboardStats();
+      if (res.data) {
+        setStats({
+          revenue: res.data.revenue || 0,
+          activeRentals: res.data.activeRentals || 0,
+          dueToday: res.data.dueToday || 0,
+          overdue: res.data.overdue || 0,
+          upcomingPickups: res.data.upcomingPickups || 0,
+          newRequests: res.data.newRequests || 0,
+          revenueChart: (res.data.revenueChart?.length ? res.data.revenueChart : FALLBACK_REVENUE_DATA),
+          statusDistribution: (res.data.statusDistribution?.length ? res.data.statusDistribution : FALLBACK_STATUS_DATA),
+        });
+      }
+    } catch (e) {
+      toast.error('Failed to load dashboard stats');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '60px', color: '#8EA58C' }}>
+        <div>Loading dashboard…</div>
+      </div>
+    );
+  }
+
+  const s = stats;
 
   return (
     <div>
@@ -41,7 +89,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Primary KPI Grid (Simplified from before) */}
+      {/* Primary KPI Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: '16px', marginBottom: '24px' }}>
         <RevenueCard value={s.revenue} />
         <StatCard label="Active Rentals" value={s.activeRentals} icon={<TrendingUp size={16} />} color="#738A6E" bg="rgba(115,138,110,0.1)" />
@@ -52,9 +100,9 @@ export function Dashboard() {
       {/* Secondary Top KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '32px' }}>
         <StatCard label="Upcoming Pickups" value={s.upcomingPickups} icon={<ArrowUpRight size={16} />} color="#344C3D" bg="rgba(52,76,61,0.1)" />
-        <StatCard label="New Requests" value={12} icon={<ArrowUpRight size={16} />} color="#344C3D" bg="rgba(52,76,61,0.1)" />
-        <div /> 
-        <div /> 
+        <StatCard label="New Requests" value={s.newRequests} icon={<ArrowUpRight size={16} />} color="#344C3D" bg="rgba(52,76,61,0.1)" />
+        <div />
+        <div />
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
@@ -72,7 +120,7 @@ export function Dashboard() {
           <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#344C3D', marginBottom: '24px' }}>Revenue (7 Days)</h3>
           <div style={{ width: '100%', height: '260px' }}>
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={REVENUE_DATA} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+              <AreaChart data={s.revenueChart} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                 <defs>
                   <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#738A6E" stopOpacity={0.4} />
@@ -100,14 +148,14 @@ export function Dashboard() {
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={ORDER_STATUS_DATA}
+                  data={s.statusDistribution}
                   innerRadius={60}
                   outerRadius={90}
                   paddingAngle={5}
                   dataKey="count"
                   animationDuration={1500}
                 >
-                  {ORDER_STATUS_DATA.map((entry, index) => (
+                  {s.statusDistribution.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>

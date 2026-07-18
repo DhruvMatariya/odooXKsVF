@@ -41,8 +41,8 @@ export function AddEditProduct() {
   async function loadProduct(productId: string) {
     try {
       const res = await getProductById(productId);
-      if (res.data) {
-        const p = res.data;
+      if (res.data?.data) {
+        const p = res.data.data;
         setForm({
           name: p.name || '',
           description: p.description || '',
@@ -51,7 +51,7 @@ export function AddEditProduct() {
           categoryId: p.category?.id || '',
         });
         if (p.thumbnail) setThumbnailPreview(p.thumbnail);
-        if (p.images?.length) setImagePreviews(p.images);
+        if (p.images?.length) setImagePreviews(p.images.map((img: any) => img.url || img));
       }
     } catch (e) {
       toast.error('Failed to load product');

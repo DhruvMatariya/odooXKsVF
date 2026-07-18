@@ -26,11 +26,11 @@ export function ManageInventory() {
         getProductById(productId),
         getInventory(productId)
       ]);
-      if (productRes.data) setProduct(productRes.data);
-      if (inventoryRes.data) {
-        setInventory(inventoryRes.data);
-        setAvailable(inventoryRes.data.available);
-        setMaintenance(inventoryRes.data.maintenance);
+      if (productRes.data?.data) setProduct(productRes.data.data);
+      if (inventoryRes.data?.data) {
+        setInventory(inventoryRes.data.data);
+        setAvailable(inventoryRes.data.data.available);
+        setMaintenance(inventoryRes.data.data.maintenance);
       }
     } catch (e) {
       toast.error('Failed to load data');

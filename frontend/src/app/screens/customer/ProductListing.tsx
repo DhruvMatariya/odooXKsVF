@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router';
+import { Search, SlidersHorizontal, LayoutGrid, List, ArrowUpDown } from 'lucide-react';
 import { formatPrice, getPricingStartingPrice } from '../../lib/utils';
 import { Pagination } from '../../components/shared/Pagination';
-import { Search, SlidersHorizontal, ArrowUpDown, LayoutGrid, List } from 'lucide-react';
 import { listProducts, getCategories } from '../../lib/api';
 import { toast } from 'sonner';
 
-const GRID_PAGE_SIZE = 9;
+const GRID_PAGE_SIZE = 6;
 const LIST_PAGE_SIZE = 10;
 
 export function ProductListing() {
@@ -14,24 +14,16 @@ export function ProductListing() {
   const [categoryId, setCategoryId] = useState('');
   const [sort, setSort] = useState('name');
   const [order, setOrder] = useState<'asc' | 'desc'>('asc');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [page, setPage] = useState(1);
   const [categories, setCategories] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [transitionKey, setTransitionKey] = useState(0);
 
   const pageSize = viewMode === 'grid' ? GRID_PAGE_SIZE : LIST_PAGE_SIZE;
-
-  function switchView(mode: 'grid' | 'list') {
-    if (mode === viewMode) return;
-    setViewMode(mode);
-    setPage(1);
-    setTransitionKey(k => k + 1);
-  }
-
-  const paged = products;
+  const paged = products.slice((page - 1) * pageSize, page * pageSize);
 
   useEffect(() => {
     loadCategories();
@@ -58,8 +50,6 @@ export function ProductListing() {
         limit: pageSize,
         search,
         category: categoryId,
-        sort,
-        order,
       });
       if (res.data) {
         setProducts(res.data.data || []);
@@ -72,7 +62,23 @@ export function ProductListing() {
     }
   }
 
+  function switchView(v: 'grid' | 'list') {
+    if (v !== viewMode) {
+      setViewMode(v);
+      setPage(1);
+      setTransitionKey(prev => prev + 1);
+    }
+  }
+
   const totalPages = Math.ceil(total / pageSize);
+
+  if (loading && products.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '80px 24px', color: '#8EA58C' }}>
+        <div style={{ fontSize: '14px', fontWeight: 500 }}>Loading products…</div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -155,15 +161,14 @@ export function ProductListing() {
         </div>
       </div>
 
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '60px', color: '#8EA58C', fontSize: '14px' }}>Loading products…</div>
-      ) : paged.length === 0 ? (
+      {/* Product display */}
+      {products.length === 0 ? (
         <EmptyState message="No products match your filters." />
       ) : viewMode === 'grid' ? (
         <div key={transitionKey} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', gridAutoRows: '1fr', marginBottom: '8px' }}>
           {paged.map((product, idx) => {
-            const startingPrice = getPricingStartingPrice(product.pricing);
-            const isUnavailable = product.inventory.available === 0;
+            const startingPrice = product.startingPrice || 0;
+            const isUnavailable = product.inventory?.available === 0;
             return (
               <Link key={product.id} to={`/customer/products/${product.id}`} style={{ display: 'block', height: '100%', textDecoration: 'none', animation: `cardFadeIn 0.4s ease both`, animationDelay: `${idx * 55}ms` }}>
                 <div
@@ -192,7 +197,7 @@ export function ProductListing() {
                   }}
                 >
                   <div style={{ position: 'relative', height: '200px', overflow: 'hidden', background: '#F0F3EF' }}>
-                    <img src={product.thumbnail} alt={product.name}
+                    <img src={product.thumbnail || ''} alt={product.name}
                       style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.5s ease' }}
                       onMouseEnter={e => (e.currentTarget as HTMLImageElement).style.transform = 'scale(1.08)'}
                       onMouseLeave={e => (e.currentTarget as HTMLImageElement).style.transform = 'scale(1)'}
@@ -200,7 +205,7 @@ export function ProductListing() {
                     <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(20,35,25,0.4) 0%, transparent 55%)' }} />
                     <div style={{ position: 'absolute', top: '10px', left: '10px' }}>
                       <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 9px', borderRadius: '100px', background: 'rgba(20,35,25,0.75)', backdropFilter: 'blur(6px)', color: 'rgba(191,207,187,0.95)' }}>
-                        {product.category.name}
+                        {product.category?.name}
                       </span>
                     </div>
                     {isUnavailable && (
@@ -220,7 +225,7 @@ export function ProductListing() {
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <span style={{ fontSize: '11px', fontWeight: 600, color: isUnavailable ? '#C97B3D' : '#4a6848' }}>
-                        {isUnavailable ? 'Out of stock' : `${product.inventory.available} available`}
+                        {isUnavailable ? 'Out of stock' : `${product.inventory?.available} available`}
                       </span>
                       <span style={{ fontSize: '11px', fontWeight: 700, padding: '4px 12px', borderRadius: '100px', background: '#344C3D', color: '#fff' }}>
                         View →
@@ -235,8 +240,8 @@ export function ProductListing() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '8px' }}>
           {paged.map(product => {
-            const startingPrice = getPricingStartingPrice(product.pricing);
-            const isUnavailable = product.inventory.available === 0;
+            const startingPrice = product.startingPrice || 0;
+            const isUnavailable = product.inventory?.available === 0;
             return (
               <Link key={product.id} to={`/customer/products/${product.id}`} style={{ textDecoration: 'none' }}>
                 <div
@@ -263,7 +268,7 @@ export function ProductListing() {
                   }}
                 >
                   <div style={{ position: 'relative', width: '110px', height: '90px', flexShrink: 0, overflow: 'hidden', background: '#F0F3EF' }}>
-                    <img src={product.thumbnail} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.4s ease' }}
+                    <img src={product.thumbnail || ''} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.4s ease' }}
                       onMouseEnter={e => (e.currentTarget as HTMLImageElement).style.transform = 'scale(1.1)'}
                       onMouseLeave={e => (e.currentTarget as HTMLImageElement).style.transform = 'scale(1)'}
                     />
@@ -278,7 +283,7 @@ export function ProductListing() {
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
                         <span style={{ fontWeight: 700, color: '#344C3D', fontSize: '14px' }}>{product.name}</span>
-                        <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px', background: 'rgba(52,76,61,0.08)', color: '#4a6848' }}>{product.category.name}</span>
+                        <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px', background: 'rgba(52,76,61,0.08)', color: '#4a6848' }}>{product.category?.name}</span>
                       </div>
                       <div style={{ fontSize: '12px', color: '#8EA58C' }}>{product.brand} · {product.vendorName}</div>
                     </div>
@@ -290,7 +295,7 @@ export function ProductListing() {
 
                     <div style={{ flexShrink: 0, textAlign: 'right' }}>
                       <div style={{ fontSize: '11px', fontWeight: 600, color: isUnavailable ? '#C97B3D' : '#4a6848', marginBottom: '6px' }}>
-                        {isUnavailable ? 'Out of stock' : `${product.inventory.available} available`}
+                        {isUnavailable ? 'Out of stock' : `${product.inventory?.available} available`}
                       </div>
                       <span style={{ fontSize: '12px', fontWeight: 700, padding: '5px 14px', borderRadius: '100px', background: '#344C3D', color: '#fff', whiteSpace: 'nowrap' }}>
                         View →

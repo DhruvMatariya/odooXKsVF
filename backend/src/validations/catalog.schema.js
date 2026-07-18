@@ -14,8 +14,6 @@ export const createProductSchema = z.object({
     description: z.string().max(2000).optional(),
     brand: z.string().max(100).optional(),
     manufacturer: z.string().max(100).optional(),
-    thumbnail: z.url().optional().or(z.literal('')),
-    images: z.array(z.url()).max(20).default([]),
   }),
 });
 
@@ -27,8 +25,6 @@ export const updateProductSchema = z.object({
     description: z.string().max(2000).optional(),
     brand: z.string().max(100).optional(),
     manufacturer: z.string().max(100).optional(),
-    thumbnail: z.url().optional().or(z.literal('')),
-    images: z.array(z.url()).max(20).optional(),
   }).refine(data => Object.keys(data).length > 0, 'At least one field required'),
 });
 

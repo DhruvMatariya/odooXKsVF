@@ -2,6 +2,7 @@ import { orderService } from '../services/order.service.js';
 import ApiError from '../utils/ApiError.js';
 import { HTTP_STATUS } from '../config/constant.js';
 import { MESSAGES } from '../config/messages.js';
+import env from '../config/env.js';
 
 function toOrderResponseDTO(order) {
   return {
@@ -21,6 +22,28 @@ function toOrderResponseDTO(order) {
     actualReturnTime: order.actualReturnTime,
     createdAt: order.createdAt,
     updatedAt: order.updatedAt,
+  };
+}
+
+function toQuotationDTO(row) {
+  return {
+    id: row.id,
+    vendorUserId: row.vendor_user_id,
+    customerName: row.customer_name,
+    customerEmail: row.customer_email,
+    customerUserId: row.customer_user_id,
+    productId: row.product_id,
+    pricingId: row.pricing_id,
+    quantity: row.quantity,
+    rentalPeriodStart: row.rental_period_start,
+    rentalPeriodEnd: row.rental_period_end,
+    deliveryType: row.delivery_type,
+    quotedAmount: row.quoted_amount,
+    status: row.status,
+    validUntil: row.valid_until,
+    orderId: row.order_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -49,6 +72,27 @@ function toOrderDetailDTO(order) {
   };
 }
 
+function formatCreateOrderResponse(response) {
+  const base = {
+    order: toOrderResponseDTO(response.order),
+  };
+  
+  if (env.PAYMENT_PROVIDER === 'razorpay') {
+    return {
+      ...base,
+      razorpayOrderIdRental: response.razorpayOrderIdRental,
+      razorpayOrderIdDeposit: response.razorpayOrderIdDeposit,
+      razorpayKeyId: response.razorpayKeyId,
+    };
+  } else {
+    return {
+      ...base,
+      stripeClientSecretRental: response.stripeClientSecretRental,
+      stripeClientSecretDeposit: response.stripeClientSecretDeposit,
+    };
+  }
+}
+
 export const orderController = {
   async createOrder(req, res) {
     const customerUserId = req.user.id;
@@ -57,11 +101,7 @@ export const orderController = {
     res.status(HTTP_STATUS.CREATED).json({
       success: true,
       message: MESSAGES.ORDERS.ORDER_CREATED,
-      data: {
-        order: toOrderResponseDTO(response.order),
-        stripeClientSecretRental: response.stripeClientSecretRental,
-        stripeClientSecretDeposit: response.stripeClientSecretDeposit,
-      },
+      data: formatCreateOrderResponse(response),
     });
   },
 
@@ -190,6 +230,101 @@ export const orderController = {
     res.status(HTTP_STATUS.OK).json({
       success: true,
       message: 'Dispute resolved',
+      data: toOrderResponseDTO(order),
+    });
+  },
+
+  async retryPayment(req, res) {
+    const customerUserId = req.user.id;
+    const response = await orderService.retryPayment(req.validated.params.id, customerUserId);
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Payment retry initiated',
+      data: {
+        order: toOrderResponseDTO(response.order),
+        ...(env.PAYMENT_PROVIDER === 'razorpay'
+          ? {
+              razorpayOrderIdRental: response.razorpayOrderIdRental,
+              razorpayOrderIdDeposit: response.razorpayOrderIdDeposit,
+              razorpayKeyId: process.env.RAZORPAY_KEY_ID,
+            }
+          : {
+              stripeClientSecretRental: response.stripeClientSecretRental,
+              stripeClientSecretDeposit: response.stripeClientSecretDeposit,
+            }),
+      },
+    });
+  },
+
+  async verifyPayment(req, res) {
+    const customerUserId = req.user.id;
+    const { provider, ...paymentData } = req.validated.body;
+    
+    const order = await orderService.verifyPayment(req.validated.params.id, customerUserId, provider, paymentData);
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Payment verified',
+      data: toOrderDetailDTO(order),
+    });
+  },
+
+  // Quotation endpoints
+  async createQuotation(req, res) {
+    const vendorUserId = req.user.id;
+    const quotation = await orderService.createQuotation(vendorUserId, req.validated.body);
+    res.status(HTTP_STATUS.CREATED).json({
+      success: true,
+      message: 'Quotation created',
+      data: toQuotationDTO(quotation),
+    });
+  },
+
+  async listQuotations(req, res) {
+    const vendorUserId = req.user.id;
+    const result = await orderService.listQuotations(vendorUserId, req.validated.query);
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      data: result.data.map(toQuotationDTO),
+      meta: result.meta,
+    });
+  },
+
+  async getQuotationById(req, res) {
+    const vendorUserId = req.user.id;
+    const quotation = await orderService.getQuotationById(req.validated.params.id, vendorUserId);
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Quotation fetched',
+      data: toQuotationDTO(quotation),
+    });
+  },
+
+  async updateQuotation(req, res) {
+    const vendorUserId = req.user.id;
+    const quotation = await orderService.updateQuotation(vendorUserId, req.validated.params.id, req.validated.body);
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Quotation updated',
+      data: toQuotationDTO(quotation),
+    });
+  },
+
+  async declineQuotation(req, res) {
+    const vendorUserId = req.user.id;
+    const quotation = await orderService.declineQuotation(vendorUserId, req.validated.params.id);
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Quotation declined',
+      data: toQuotationDTO(quotation),
+    });
+  },
+
+  async confirmQuotation(req, res) {
+    const vendorUserId = req.user.id;
+    const order = await orderService.confirmQuotation(vendorUserId, req.validated.params.id);
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Quotation confirmed, order created',
       data: toOrderResponseDTO(order),
     });
   },

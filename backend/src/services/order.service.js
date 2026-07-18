@@ -1,4 +1,3 @@
-import Stripe from 'stripe';
 import pool from '../config/db.js';
 import ApiError from '../utils/ApiError.js';
 import { HTTP_STATUS } from '../config/constant.js';
@@ -7,8 +6,9 @@ import env from '../config/env.js';
 import { notificationQueue, JOB_NAMES } from '../queues/notificationQueue.js';
 import { calculateLateFee } from '../utils/lateFee.js';
 import { calculateCancellationRefund } from '../utils/cancelRefund.js';
+import { getPaymentProvider, PAYMENT_TYPES, PAYMENT_STATUSES } from '../payments/index.js';
 
-const stripe = new Stripe(env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
+const paymentProvider = getPaymentProvider();
 
 const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -33,7 +33,30 @@ function toOrderDTO(row) {
   };
 }
 
+function toQuotationDTO(row) {
+  return {
+    id: row.id,
+    vendorUserId: row.vendor_user_id,
+    customerName: row.customer_name,
+    customerEmail: row.customer_email,
+    customerUserId: row.customer_user_id,
+    productId: row.product_id,
+    pricingId: row.pricing_id,
+    quantity: row.quantity,
+    rentalPeriodStart: row.rental_period_start,
+    rentalPeriodEnd: row.rental_period_end,
+    deliveryType: row.delivery_type,
+    quotedAmount: row.quoted_amount,
+    status: row.status,
+    validUntil: row.valid_until,
+    orderId: row.order_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 export const orderService = {
+  // Phase A: Create order in DB only (no payment calls)
   async createOrder(customerUserId, data, idempotencyKey) {
     const client = await pool.connect();
     try {
@@ -94,53 +117,170 @@ export const orderService = {
 
       const order = orderResult.rows[0];
 
-      const rentalIntent = await stripe.paymentIntents.create({
-        amount: totalRentalFee,
-        currency: 'inr',
-        automatic_payment_methods: { enabled: true },
-        metadata: { orderId: order.id, type: 'RENTAL_FEE' },
-      });
-
-      const depositIntent = await stripe.paymentIntents.create({
-        amount: totalDeposit,
-        currency: 'inr',
-        automatic_payment_methods: { enabled: true },
-        metadata: { orderId: order.id, type: 'DEPOSIT' },
-      });
-
-      await client.query(
-        `INSERT INTO payments (order_id, stripe_payment_intent_id, amount, type, status)
-         VALUES ($1, $2, $3, 'RENTAL_FEE', 'pending'), ($1, $4, $5, 'DEPOSIT', 'pending')`,
-        [order.id, rentalIntent.id, totalRentalFee, depositIntent.id, totalDeposit]
-      );
-
       await client.query(
         `INSERT INTO order_events (order_id, from_status, to_status, actor_role, actor_user_id, note)
          VALUES ($1, NULL, 'PENDING_PAYMENT', 'CUSTOMER', $2, 'Order created, awaiting payment')`,
         [order.id, customerUserId]
       );
 
+      // Phase A complete - order exists in DB with PENDING_PAYMENT
+      await client.query('COMMIT');
+      client.release();
+
+      // Phase B: Initiate payment (outside transaction)
+      return await this.initiatePayment(order, customerUserId, totalRentalFee, totalDeposit, idempotencyKey);
+    } catch (err) {
+      await client.query('ROLLBACK');
+      client.release();
+      if (err instanceof ApiError) throw err;
+      throw new ApiError(HTTP_STATUS.INTERNAL_SERVER_ERROR, MESSAGES.SERVER.INTERNAL_ERROR);
+    }
+  },
+
+  // Phase B: Initiate payment after order is persisted
+  async initiatePayment(order, customerUserId, totalRentalFee, totalDeposit, idempotencyKey) {
+    try {
+      const rentalPayment = await paymentProvider.createRentalFeePayment({
+        amount: totalRentalFee,
+        currency: 'INR',
+        orderId: order.id,
+        metadata: { orderId: order.id, type: PAYMENT_TYPES.RENTAL_FEE },
+      });
+
+      const depositPayment = await paymentProvider.createDepositPayment({
+        amount: totalDeposit,
+        currency: 'INR',
+        orderId: order.id,
+        metadata: { orderId: order.id, type: PAYMENT_TYPES.DEPOSIT },
+      });
+
+      const provider = env.PAYMENT_PROVIDER?.toLowerCase();
+      const rentalProviderId = rentalPayment.id;
+      const depositProviderId = depositPayment.id;
+
+      await pool.query(
+        `INSERT INTO payments (order_id, provider, provider_order_id, provider_payment_id, amount, type, status)
+         VALUES ($1, $2, $3, $4, $5, 'RENTAL_FEE', 'pending'), ($1, $2, $6, $7, $8, 'DEPOSIT', 'pending')`,
+        [order.id, env.PAYMENT_PROVIDER, rentalProviderId, null, totalRentalFee, depositProviderId, null, totalDeposit]
+      );
+
+      await pool.query(
+        `INSERT INTO order_events (order_id, from_status, to_status, actor_role, actor_user_id, note)
+         VALUES ($1, NULL, 'PENDING_PAYMENT', 'CUSTOMER', $2, 'Order created, awaiting payment')`,
+        [order.id, order.customer_user_id]
+      );
+
       const response = {
-        order: toOrderDTO(order),
-        stripeClientSecretRental: rentalIntent.client_secret,
-        stripeClientSecretDeposit: depositIntent.client_secret,
+        order: toOrderDTO({ ...order }),
+        ...(env.PAYMENT_PROVIDER === 'razorpay'
+          ? {
+              razorpayOrderIdRental: rentalPayment.id,
+              razorpayOrderIdDeposit: depositPayment.id,
+              razorpayKeyId: process.env.RAZORPAY_KEY_ID,
+            }
+          : {
+              stripeClientSecretRental: rentalPayment.clientSecret,
+              stripeClientSecretDeposit: depositPayment.clientSecret,
+            }),
       };
 
       if (idempotencyKey) {
-        await client.query(
+        await pool.query(
           `INSERT INTO idempotency_keys (key, response, expires_at) VALUES ($1, $2, NOW() + INTERVAL '24 hours')`,
           [idempotencyKey, JSON.stringify(response)]
         );
       }
 
-      await client.query('COMMIT');
       return response;
     } catch (err) {
+      // Payment initiation failed - update order to PAYMENT_FAILED
+      await this.handlePaymentInitiationFailure(order.id, err);
+      throw new ApiError(HTTP_STATUS.BAD_GATEWAY, `Payment initiation failed: ${err.message}`, 'PAYMENT_INITIATION_FAILED');
+    }
+  },
+
+  async handlePaymentInitiationFailure(orderId, error) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      await client.query(
+        `UPDATE orders SET status = 'PAYMENT_FAILED', updated_at = NOW() WHERE id = $1`,
+        [orderId]
+      );
+
+      await client.query(
+        `INSERT INTO payments (order_id, provider, provider_order_id, amount, type, status, error_message)
+         VALUES ($1, $2, $3, $4, 'RENTAL_FEE', 'failed', $5), ($1, $2, $6, $7, 'DEPOSIT', 'failed', $5)`,
+        [orderId, env.PAYMENT_PROVIDER, 'unknown', 0, error.message, 'unknown', 0]
+      );
+
+      await client.query(
+        `INSERT INTO order_events (order_id, from_status, to_status, actor_role, actor_user_id, note)
+         VALUES ($1, 'PENDING_PAYMENT', 'PAYMENT_FAILED', 'SYSTEM', NULL, $2)`,
+        [orderId, `Payment initiation failed: ${error.message}`]
+      );
+
+      await client.query('COMMIT');
+    } catch (err) {
       await client.query('ROLLBACK');
-      if (err instanceof ApiError) throw err;
-      throw new ApiError(HTTP_STATUS.INTERNAL_SERVER_ERROR, MESSAGES.SERVER.INTERNAL_ERROR);
+      console.error('Failed to record payment failure:', err);
     } finally {
       client.release();
+    }
+  },
+
+  // Retry payment for PAYMENT_FAILED orders
+  async retryPayment(orderId, customerUserId) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const orderResult = await client.query(
+        `SELECT * FROM orders WHERE id = $1 AND customer_user_id = $2 FOR UPDATE`,
+        [orderId, customerUserId]
+      );
+
+      if (orderResult.rows.length === 0) {
+        throw new ApiError(HTTP_STATUS.NOT_FOUND, MESSAGES.ORDERS.ORDER_NOT_FOUND, 'ORDER_NOT_FOUND');
+      }
+
+      const order = orderResult.rows[0];
+
+      if (order.status !== 'PAYMENT_FAILED') {
+        throw new ApiError(HTTP_STATUS.CONFLICT, MESSAGES.ORDERS.INVALID_STATE_TRANSITION, 'INVALID_STATE_TRANSITION');
+      }
+
+      const rentalStart = new Date(order.rental_period_start);
+      if (rentalStart <= new Date()) {
+        throw new ApiError(HTTP_STATUS.BAD_REQUEST, MESSAGES.ORDERS.RENTAL_PERIOD_INVALID, 'RENTAL_PERIOD_INVALID');
+      }
+
+      const invResult = await client.query(
+        `SELECT available FROM inventory WHERE product_id = $1 FOR SHARE`,
+        [order.product_id]
+      );
+      if (invResult.rows.length === 0 || invResult.rows[0].available < order.quantity) {
+        throw new ApiError(HTTP_STATUS.CONFLICT, MESSAGES.ORDERS.INVENTORY_INSUFFICIENT, 'INVENTORY_INSUFFICIENT');
+      }
+
+      const pricingResult = await client.query(
+        `SELECT price, deposit FROM product_pricing WHERE id = $1`,
+        [order.pricing_id]
+      );
+      const pricing = pricingResult.rows[0];
+      const totalRentalFee = pricing.price * order.quantity;
+      const totalDeposit = pricing.deposit * order.quantity;
+
+      await client.query('COMMIT');
+      client.release();
+
+      return await this.initiatePayment(order, customerUserId, totalRentalFee, totalDeposit, null);
+    } catch (err) {
+      await client.query('ROLLBACK');
+      client.release();
+      if (err instanceof ApiError) throw err;
+      throw new ApiError(HTTP_STATUS.INTERNAL_SERVER_ERROR, MESSAGES.SERVER.INTERNAL_ERROR);
     }
   },
 
@@ -229,11 +369,102 @@ export const orderService = {
     }
   },
 
+  async handlePaymentSuccess(orderId, providerPaymentId, type) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const orderResult = await client.query(
+        `SELECT * FROM orders WHERE id = $1 FOR UPDATE`,
+        [orderId]
+      );
+      if (orderResult.rows.length === 0) {
+        throw new ApiError(HTTP_STATUS.NOT_FOUND, MESSAGES.ORDERS.ORDER_NOT_FOUND, 'ORDER_NOT_FOUND');
+      }
+      const order = orderResult.rows[0];
+
+      if (order.status !== 'PENDING_PAYMENT') {
+        await client.query('COMMIT');
+        return { alreadyProcessed: true };
+      }
+
+      const provider = env.PAYMENT_PROVIDER?.toLowerCase();
+      const idColumn = provider === 'razorpay' ? 'provider_payment_id' : 'stripe_payment_intent_id';
+      
+      await client.query(
+        `UPDATE payments SET status = 'succeeded', ${idColumn} = $2 WHERE order_id = $1 AND (provider_order_id = $3 OR provider_payment_id = $3)`,
+        [orderId, providerPaymentId, providerPaymentId]
+      );
+
+      const paymentsResult = await client.query(
+        `SELECT * FROM payments WHERE order_id = $1`,
+        [orderId]
+      );
+      const allSucceeded = paymentsResult.rows.every(p => p.status === 'succeeded');
+
+      if (allSucceeded) {
+        await client.query(
+          `UPDATE orders SET status = 'CONFIRMED', updated_at = NOW() WHERE id = $1`,
+          [orderId]
+        );
+
+        const pricingResult = await client.query(
+          `SELECT deposit FROM product_pricing WHERE id = $1`,
+          [order.pricing_id]
+        );
+        const depositAmount = pricingResult.rows[0].deposit * order.quantity;
+
+        await client.query(
+          `INSERT INTO deposits (order_id, amount_held, status, method) VALUES ($1, $2, 'HELD', $3)`,
+          [orderId, depositAmount, env.PAYMENT_PROVIDER.toUpperCase()]
+        );
+
+        await client.query(
+          `UPDATE inventory SET available = available - $1, reserved = reserved + $1 WHERE product_id = $2`,
+          [order.quantity, order.product_id]
+        );
+
+        await client.query(
+          `INSERT INTO order_events (order_id, from_status, to_status, actor_role, actor_user_id, note)
+           VALUES ($1, 'PENDING_PAYMENT', 'CONFIRMED', 'SYSTEM', NULL, 'Both rental fee and deposit payments succeeded')`,
+          [orderId]
+        );
+      }
+
+      await client.query('COMMIT');
+      return { order: await this.getOrderById(orderId, order.customer_user_id, 'customer') };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  },
+
+  async handleRefund(orderId, providerPaymentId) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const provider = env.PAYMENT_PROVIDER?.toLowerCase();
+      const idColumn = provider === 'razorpay' ? 'provider_payment_id' : 'stripe_payment_intent_id';
+      
+      await client.query(
+        `UPDATE payments SET status = 'refunded' WHERE order_id = $1 AND ${idColumn} = $2`,
+        [orderId, providerPaymentId]
+      );
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  },
+
   async getOrderById(orderId, userId, userRole) {
-    const result = await pool.query(
-      `SELECT * FROM orders WHERE id = $1`,
-      [orderId]
-    );
+    const result = await pool.query(`SELECT * FROM orders WHERE id = $1`, [orderId]);
     if (result.rows.length === 0) {
       throw new ApiError(HTTP_STATUS.NOT_FOUND, MESSAGES.ORDERS.ORDER_NOT_FOUND, 'ORDER_NOT_FOUND');
     }
@@ -246,25 +477,10 @@ export const orderService = {
       throw new ApiError(HTTP_STATUS.FORBIDDEN, MESSAGES.ORDERS.FORBIDDEN_NOT_OWNER, 'FORBIDDEN_NOT_OWNER');
     }
 
-    const productResult = await pool.query(
-      `SELECT id, name, thumbnail, brand FROM products WHERE id = $1`,
-      [order.product_id]
-    );
-
-    const depositResult = await pool.query(
-      `SELECT * FROM deposits WHERE order_id = $1`,
-      [orderId]
-    );
-
-    const paymentsResult = await pool.query(
-      `SELECT * FROM payments WHERE order_id = $1`,
-      [orderId]
-    );
-
-    const eventsResult = await pool.query(
-      `SELECT * FROM order_events WHERE order_id = $1 ORDER BY created_at`,
-      [orderId]
-    );
+    const productResult = await pool.query(`SELECT id, name, thumbnail, brand FROM products WHERE id = $1`, [order.product_id]);
+    const depositResult = await pool.query(`SELECT * FROM deposits WHERE order_id = $1`, [orderId]);
+    const paymentsResult = await pool.query(`SELECT * FROM payments WHERE order_id = $1`, [orderId]);
+    const eventsResult = await pool.query(`SELECT * FROM order_events WHERE order_id = $1 ORDER BY created_at`, [orderId]);
 
     return {
       ...toOrderDTO(order),
@@ -295,10 +511,7 @@ export const orderService = {
       paramIndex++;
     }
 
-    const countResult = await pool.query(
-      `SELECT COUNT(*) FROM orders ${whereClause}`,
-      params
-    );
+    const countResult = await pool.query(`SELECT COUNT(*) FROM orders ${whereClause}`, params);
     const total = parseInt(countResult.rows[0].count);
 
     params.push(limit, offset);
@@ -311,94 +524,6 @@ export const orderService = {
       data: ordersResult.rows.map(toOrderDTO),
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
-  },
-
-  async handleStripePaymentSuccess(orderId, paymentIntentId, type) {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      const orderResult = await client.query(
-        `SELECT * FROM orders WHERE id = $1 FOR UPDATE`,
-        [orderId]
-      );
-      if (orderResult.rows.length === 0) {
-        throw new ApiError(HTTP_STATUS.NOT_FOUND, MESSAGES.ORDERS.ORDER_NOT_FOUND, 'ORDER_NOT_FOUND');
-      }
-      const order = orderResult.rows[0];
-
-      if (order.status !== 'PENDING_PAYMENT') {
-        await client.query('COMMIT');
-        return { alreadyProcessed: true };
-      }
-
-      await client.query(
-        `UPDATE payments SET status = 'succeeded' WHERE order_id = $1 AND stripe_payment_intent_id = $2`,
-        [orderId, paymentIntentId]
-      );
-
-      const paymentsResult = await client.query(
-        `SELECT * FROM payments WHERE order_id = $1`,
-        [orderId]
-      );
-      const allSucceeded = paymentsResult.rows.every(p => p.status === 'succeeded');
-
-      if (allSucceeded) {
-        await client.query(
-          `UPDATE orders SET status = 'CONFIRMED', updated_at = NOW() WHERE id = $1`,
-          [orderId]
-        );
-
-        const pricingResult = await client.query(
-          `SELECT deposit FROM product_pricing WHERE id = $1`,
-          [order.pricing_id]
-        );
-        const depositAmount = pricingResult.rows[0].deposit * order.quantity;
-
-        await client.query(
-          `INSERT INTO deposits (order_id, amount_held, status, method) VALUES ($1, $2, 'HELD', 'STRIPE')`,
-          [orderId, depositAmount]
-        );
-
-        await client.query(
-          `UPDATE inventory SET available = available - $1, reserved = reserved + $1 WHERE product_id = $2`,
-          [order.quantity, order.product_id]
-        );
-
-        await client.query(
-          `INSERT INTO order_events (order_id, from_status, to_status, actor_role, actor_user_id, note)
-           VALUES ($1, 'PENDING_PAYMENT', 'CONFIRMED', 'SYSTEM', NULL, 'Both rental fee and deposit payments succeeded')`,
-          [orderId]
-        );
-      }
-
-      await client.query('COMMIT');
-      return { order: await this.getOrderById(orderId, order.customer_user_id, 'customer') };
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
-  },
-
-  async handleStripeRefund(orderId, paymentIntentId) {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      await client.query(
-        `UPDATE payments SET status = 'refunded' WHERE order_id = $1 AND stripe_payment_intent_id = $2`,
-        [orderId, paymentIntentId]
-      );
-
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
   },
 
   async dispatchOrder(orderId, vendorUserId) {
@@ -419,10 +544,7 @@ export const orderService = {
         throw new ApiError(HTTP_STATUS.CONFLICT, MESSAGES.ORDERS.INVALID_STATE_TRANSITION, 'INVALID_STATE_TRANSITION');
       }
 
-      await client.query(
-        `UPDATE orders SET status = 'DISPATCHED', updated_at = NOW() WHERE id = $1`,
-        [orderId]
-      );
+      await client.query(`UPDATE orders SET status = 'DISPATCHED', updated_at = NOW() WHERE id = $1`, [orderId]);
 
       await client.query(
         `INSERT INTO order_events (order_id, from_status, to_status, actor_role, actor_user_id, note)
@@ -433,7 +555,6 @@ export const orderService = {
       await notificationQueue.add(JOB_NAMES.DISPATCH_NOTIFICATION_EMAIL, { orderId, vendorUserId });
 
       await client.query('COMMIT');
-      await notificationQueue.add(JOB_NAMES.DISPATCH_NOTIFICATION_EMAIL, { orderId, vendorUserId });
       return toOrderDTO({ ...order, status: 'DISPATCHED' });
     } catch (err) {
       await client.query('ROLLBACK');
@@ -487,29 +608,25 @@ export const orderService = {
         const isRefund = data.resolution === 'REFUND';
 
         if (isRefund) {
-          // Fetch both payment intents for this order
           const paymentsResult = await client.query(
-            `SELECT stripe_payment_intent_id, type FROM payments WHERE order_id = $1`,
+            `SELECT provider_payment_id, type FROM payments WHERE order_id = $1`,
             [orderId]
           );
-          // Attempt Stripe refunds for both
+
           for (const payment of paymentsResult.rows) {
             try {
-              await stripe.refunds.create({
-                payment_intent: payment.stripe_payment_intent_id,
+              await paymentProvider.refundPayment({
+                paymentId: payment.provider_payment_id,
+                amount: payment.amount,
                 reason: 'requested_by_customer',
               });
             } catch (stripeErr) {
               await client.query('ROLLBACK');
-              throw new ApiError(HTTP_STATUS.BAD_GATEWAY, `Stripe refund failed for ${payment.type}: ${stripeErr.message}`, 'PAYMENT_FAILED');
+              throw new ApiError(HTTP_STATUS.BAD_GATEWAY, `Refund failed for ${payment.type}: ${stripeErr.message}`, 'PAYMENT_FAILED');
             }
           }
 
-          // Update payments status
-          await client.query(
-            `UPDATE payments SET status = 'refunded' WHERE order_id = $1`,
-            [orderId]
-          );
+          await client.query(`UPDATE payments SET status = 'refunded' WHERE order_id = $1`, [orderId]);
 
           await client.query(
             `UPDATE orders SET status = 'REJECTED_AT_DELIVERY', updated_at = NOW() WHERE id = $1`,
@@ -532,7 +649,6 @@ export const orderService = {
           await client.query('COMMIT');
           return toOrderDTO({ ...order, status: 'REJECTED_AT_DELIVERY' });
         } else {
-          // REPLACE branch
           await client.query(
             `UPDATE orders SET status = 'REPLACEMENT_REQUESTED', updated_at = NOW() WHERE id = $1`,
             [orderId]
@@ -578,27 +694,25 @@ export const orderService = {
       }
 
       if (resolution === 'REDISPATCH') {
-        // Check inventory availability for this product
         const invResult = await client.query(
           `SELECT available FROM inventory WHERE product_id = $1 FOR SHARE`,
           [order.product_id]
         );
         if (invResult.rows.length === 0 || invResult.rows[0].available < order.quantity) {
-          // Not enough stock, force REFUND
-          // Perform refund logic similar to reject+refund
           const paymentsResult = await client.query(
-            `SELECT stripe_payment_intent_id, type FROM payments WHERE order_id = $1`,
+            `SELECT provider_payment_id, type FROM payments WHERE order_id = $1`,
             [orderId]
           );
           for (const payment of paymentsResult.rows) {
             try {
-              await stripe.refunds.create({
-                payment_intent: payment.stripe_payment_intent_id,
+              await paymentProvider.refundPayment({
+                paymentId: payment.provider_payment_id,
+                amount: payment.amount,
                 reason: 'requested_by_customer',
               });
             } catch (stripeErr) {
               await client.query('ROLLBACK');
-              throw new ApiError(HTTP_STATUS.BAD_GATEWAY, `Stripe refund failed for ${payment.type}: ${stripeErr.message}`, 'PAYMENT_FAILED');
+              throw new ApiError(HTTP_STATUS.BAD_GATEWAY, `Refund failed for ${payment.type}: ${stripeErr.message}`, 'PAYMENT_FAILED');
             }
           }
           await client.query(`UPDATE payments SET status = 'refunded' WHERE order_id = $1`, [orderId]);
@@ -623,11 +737,7 @@ export const orderService = {
           return { order: toOrderDTO({ ...order, status: 'REJECTED_AT_DELIVERY' }), message: 'Insufficient inventory for replacement; refund processed instead.' };
         }
 
-        // Inventory available, loop back to DISPATCHED
-        await client.query(
-          `UPDATE orders SET status = 'DISPATCHED', updated_at = NOW() WHERE id = $1`,
-          [orderId]
-        );
+        await client.query(`UPDATE orders SET status = 'DISPATCHED', updated_at = NOW() WHERE id = $1`, [orderId]);
         await client.query(
           `INSERT INTO order_events (order_id, from_status, to_status, actor_role, actor_user_id, note)
            VALUES ($1, 'REPLACEMENT_REQUESTED', 'DISPATCHED', 'VENDOR', $2, 'Replacement dispatched')`,
@@ -639,31 +749,23 @@ export const orderService = {
         await client.query('COMMIT');
         return { order: toOrderDTO({ ...order, status: 'DISPATCHED' }), message: 'Replacement dispatched' };
       } else { // REFUND
-        const paymentsResult = await client.query(
-          `SELECT stripe_payment_intent_id, type FROM payments WHERE order_id = $1`,
-          [orderId]
-        );
+        const paymentsResult = await client.query(`SELECT provider_payment_id, type FROM payments WHERE order_id = $1`, [orderId]);
         for (const payment of paymentsResult.rows) {
           try {
-            await stripe.refunds.create({
-              payment_intent: payment.stripe_payment_intent_id,
+            await paymentProvider.refundPayment({
+              paymentId: payment.provider_payment_id,
+              amount: payment.amount,
               reason: 'requested_by_customer',
             });
           } catch (stripeErr) {
             await client.query('ROLLBACK');
-            throw new ApiError(HTTP_STATUS.BAD_GATEWAY, `Stripe refund failed for ${payment.type}: ${stripeErr.message}`, 'PAYMENT_FAILED');
+            throw new ApiError(HTTP_STATUS.BAD_GATEWAY, `Refund failed for ${payment.type}: ${stripeErr.message}`, 'PAYMENT_FAILED');
           }
         }
         await client.query(`UPDATE payments SET status = 'refunded' WHERE order_id = $1`, [orderId]);
 
-        await client.query(
-          `UPDATE orders SET status = 'REJECTED_AT_DELIVERY', updated_at = NOW() WHERE id = $1`,
-          [orderId]
-        );
-        await client.query(
-          `UPDATE inventory SET reserved = reserved - $1, available = available + $1 WHERE product_id = $2`,
-          [order.quantity, order.product_id]
-        );
+        await client.query(`UPDATE orders SET status = 'REJECTED_AT_DELIVERY', updated_at = NOW() WHERE id = $1`, [orderId]);
+        await client.query(`UPDATE inventory SET reserved = reserved - $1, available = available + $1 WHERE product_id = $2`, [order.quantity, order.product_id]);
         await client.query(
           `INSERT INTO order_events (order_id, from_status, to_status, actor_role, actor_user_id, note)
            VALUES ($1, 'REPLACEMENT_REQUESTED', 'REJECTED_AT_DELIVERY', 'VENDOR', $2, 'Vendor chose refund for replacement')`,
@@ -689,7 +791,6 @@ export const orderService = {
     try {
       await client.query('BEGIN');
 
-      // Lock order row
       const orderResult = await client.query(
         `SELECT * FROM orders WHERE id = $1 AND customer_user_id = $2 FOR UPDATE`,
         [orderId, customerUserId]
@@ -703,7 +804,6 @@ export const orderService = {
         throw new ApiError(HTTP_STATUS.CONFLICT, MESSAGES.ORDERS.INVALID_STATE_TRANSITION, 'INVALID_STATE_TRANSITION');
       }
 
-      // Lock return_slots row
       const slotResult = await client.query(
         `SELECT * FROM return_slots WHERE id = $1 FOR UPDATE`,
         [returnSlotId]
@@ -721,17 +821,9 @@ export const orderService = {
         throw new ApiError(HTTP_STATUS.CONFLICT, 'Return slot is full', 'SLOT_FULL');
       }
 
-      // Increment booked_count
-      await client.query(
-        `UPDATE return_slots SET booked_count = booked_count + 1 WHERE id = $1`,
-        [returnSlotId]
-      );
+      await client.query(`UPDATE return_slots SET booked_count = booked_count + 1 WHERE id = $1`, [returnSlotId]);
 
-      // Update order
-      await client.query(
-        `UPDATE orders SET return_slot_id = $1, status = 'RETURN_SCHEDULED', updated_at = NOW() WHERE id = $2`,
-        [returnSlotId, orderId]
-      );
+      await client.query(`UPDATE orders SET return_slot_id = $1, status = 'RETURN_SCHEDULED', updated_at = NOW() WHERE id = $2`, [returnSlotId, orderId]);
 
       await client.query(
         `INSERT INTO order_events (order_id, from_status, to_status, actor_role, actor_user_id, note)
@@ -810,24 +902,15 @@ export const orderService = {
         throw new ApiError(HTTP_STATUS.CONFLICT, MESSAGES.ORDERS.INVALID_STATE_TRANSITION, 'INVALID_STATE_TRANSITION');
       }
 
-      // Fetch deposit
-      const depositResult = await client.query(
-        `SELECT * FROM deposits WHERE order_id = $1`,
-        [orderId]
-      );
+      const depositResult = await client.query(`SELECT * FROM deposits WHERE order_id = $1`, [orderId]);
       if (depositResult.rows.length === 0) {
         throw new ApiError(HTTP_STATUS.NOT_FOUND, 'Deposit not found for order', 'DEPOSIT_NOT_FOUND');
       }
       const deposit = depositResult.rows[0];
 
-      // Fetch late fee rule for vendor
-      const lfrResult = await client.query(
-        `SELECT * FROM late_fee_rules WHERE vendor_user_id = $1`,
-        [order.vendor_user_id]
-      );
+      const lfrResult = await client.query(`SELECT * FROM late_fee_rules WHERE vendor_user_id = $1`, [order.vendor_user_id]);
       const lateFeeRule = lfrResult.rows[0] || { gracePeriodHours: 0, rateType: 'HOURLY', rateAmount: 0, maxCap: 0 };
 
-      // Compute late fee
       const { latePenalty, totalDeduction, refundAmount, lateByMinutes } = calculateLateFee(
         lateFeeRule,
         order.actual_return_time,
@@ -836,51 +919,38 @@ export const orderService = {
         data.damageDeductionAmount
       );
 
-      // Insert inspection_reports
       await client.query(
         `INSERT INTO inspection_reports (order_id, condition_notes, damage_found, photos, late_by_minutes, penalty_amount, inspected_by, inspected_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
-        [
-          orderId,
-          data.conditionNotes ?? '',
-          data.damageFound,
-          JSON.stringify(data.photos ?? []),
-          lateByMinutes,
-          totalDeduction,
-          vendorUserId,
-        ]
+        [orderId, data.conditionNotes ?? '', data.damageFound, JSON.stringify(data.photos ?? []), lateByMinutes, totalDeduction, vendorUserId]
       );
 
-      // Update deposit
       const newDepositStatus = totalDeduction === 0 ? 'REFUNDED' : 'PARTIALLY_DEDUCTED';
       await client.query(
         `UPDATE deposits SET status = $1, deduction_amount = $2, refund_amount = $3, settled_at = NOW() WHERE order_id = $4`,
         [newDepositStatus, totalDeduction, refundAmount, orderId]
       );
 
-      // Stripe refund for deposit if refundAmount > 0
       if (refundAmount > 0) {
-        // Find deposit payment intent
         const paymentResult = await client.query(
-          `SELECT stripe_payment_intent_id FROM payments WHERE order_id = $1 AND type = 'DEPOSIT'`,
+          `SELECT provider_payment_id FROM payments WHERE order_id = $1 AND type = 'DEPOSIT'`,
           [orderId]
         );
         if (paymentResult.rows.length > 0) {
-          const depositPi = paymentResult.rows[0].stripe_payment_intent_id;
+          const depositPi = paymentResult.rows[0].provider_payment_id;
           try {
-            await stripe.refunds.create({
-              payment_intent: depositPi,
+            await paymentProvider.refundPayment({
+              paymentId: depositPi,
               amount: refundAmount,
               reason: 'requested_by_customer',
             });
           } catch (stripeErr) {
             await client.query('ROLLBACK');
-            throw new ApiError(HTTP_STATUS.BAD_GATEWAY, `Stripe refund failed for deposit: ${stripeErr.message}`, 'PAYMENT_FAILED');
+            throw new ApiError(HTTP_STATUS.BAD_GATEWAY, `Refund failed for deposit: ${stripeErr.message}`, 'PAYMENT_FAILED');
           }
         }
       }
 
-      // Inventory transition
       if (data.damageFound) {
         await client.query(
           `UPDATE inventory SET rented = rented - $1, maintenance = maintenance + $1 WHERE product_id = $2`,
@@ -893,13 +963,8 @@ export const orderService = {
         );
       }
 
-      // Order status to COMPLETED (terminal)
-      await client.query(
-        `UPDATE orders SET status = 'COMPLETED', updated_at = NOW() WHERE id = $1`,
-        [orderId]
-      );
+      await client.query(`UPDATE orders SET status = 'COMPLETED', updated_at = NOW() WHERE id = $1`, [orderId]);
 
-      // order_events with computation note
       const note = `Inspection completed. Late by ${lateByMinutes} min (grace ${lateFeeRule.gracePeriodHours}h). Late penalty: ${latePenalty}. Damage deduction: ${data.damageDeductionAmount}. Total deduction: ${totalDeduction}. Refund: ${refundAmount}. Damage found: ${data.damageFound}.`;
       await client.query(
         `INSERT INTO order_events (order_id, from_status, to_status, actor_role, actor_user_id, note)
@@ -911,7 +976,6 @@ export const orderService = {
 
       await client.query('COMMIT');
 
-      // Return order DTO plus inspection details
       const inspection = {
         damageFound: data.damageFound,
         conditionNotes: data.conditionNotes,
@@ -937,7 +1001,6 @@ export const orderService = {
     try {
       await client.query('BEGIN');
 
-      // Idempotency check
       if (idempotencyKey) {
         const existing = await client.query(
           `SELECT response FROM idempotency_keys WHERE key = $1 AND expires_at > NOW()`,
@@ -949,17 +1012,12 @@ export const orderService = {
         }
       }
 
-      // lock order
-      const orderResult = await client.query(
-        `SELECT * FROM orders WHERE id = $1 FOR UPDATE`,
-        [orderId]
-      );
+      const orderResult = await client.query(`SELECT * FROM orders WHERE id = $1 FOR UPDATE`, [orderId]);
       if (orderResult.rows.length === 0) {
         throw new ApiError(HTTP_STATUS.NOT_FOUND, MESSAGES.ORDERS.ORDER_NOT_FOUND, 'ORDER_NOT_FOUND');
       }
       const order = orderResult.rows[0];
 
-      // ownership check
       if (userRole === 'customer' && order.customer_user_id !== userId) {
         throw new ApiError(HTTP_STATUS.FORBIDDEN, MESSAGES.ORDERS.FORBIDDEN_NOT_OWNER, 'FORBIDDEN_NOT_OWNER');
       }
@@ -967,12 +1025,10 @@ export const orderService = {
         throw new ApiError(HTTP_STATUS.FORBIDDEN, MESSAGES.ORDERS.FORBIDDEN_NOT_OWNER, 'FORBIDDEN_NOT_OWNER');
       }
 
-      // allowed statuses
       if (!['PENDING_PAYMENT', 'CONFIRMED'].includes(order.status)) {
         throw new ApiError(HTTP_STATUS.CONFLICT, MESSAGES.ORDERS.INVALID_STATE_TRANSITION, 'INVALID_STATE_TRANSITION');
       }
 
-      // fetch cancellation policy for vendor
       const cpResult = await client.query(
         `SELECT * FROM cancellation_policies WHERE vendor_user_id = $1`,
         [order.vendor_user_id]
@@ -983,7 +1039,6 @@ export const orderService = {
         partial_refund_percent: 50,
       };
 
-      // compute hours until rental start
       const hoursUntilStart = (new Date(order.rental_period_start).getTime() - Date.now()) / 3_600_000;
       let refundPercent;
       if (hoursUntilStart >= cancellationPolicy.full_refund_hours_before) {
@@ -994,14 +1049,9 @@ export const orderService = {
         refundPercent = 0;
       }
 
-      // fetch payments
-      const paymentsResult = await client.query(
-        `SELECT * FROM payments WHERE order_id = $1`,
-        [orderId]
-      );
+      const paymentsResult = await client.query(`SELECT * FROM payments WHERE order_id = $1`, [orderId]);
       const payments = paymentsResult.rows;
 
-      // compute total paid amounts per type
       let rentalPaid = 0;
       let depositPaid = 0;
       for (const p of payments) {
@@ -1011,54 +1061,48 @@ export const orderService = {
         }
       }
 
-      // refund amounts
       const rentalRefund = Math.floor((rentalPaid * refundPercent) / 100);
-      const depositRefund = depositPaid; // deposit always fully refunded on cancellation
-
+      const depositRefund = depositPaid;
       const totalRefund = rentalRefund + depositRefund;
 
-      // process Stripe refunds if CONFIRMED (payments succeeded)
       if (order.status === 'CONFIRMED' && totalRefund > 0) {
-        // refund rental fee payment intent proportionally
         if (rentalRefund > 0) {
           const rentalPayment = payments.find(p => p.type === 'RENTAL_FEE' && p.status === 'succeeded');
           if (rentalPayment) {
             try {
-              await stripe.refunds.create({
-                payment_intent: rentalPayment.stripe_payment_intent_id,
+              await paymentProvider.refundPayment({
+                paymentId: rentalPayment.provider_payment_id,
                 amount: rentalRefund,
                 reason: 'requested_by_customer',
               });
             } catch (stripeErr) {
               await client.query('ROLLBACK');
-              throw new ApiError(HTTP_STATUS.BAD_GATEWAY, `Stripe refund failed for rental fee: ${stripeErr.message}`, 'PAYMENT_FAILED');
+              throw new ApiError(HTTP_STATUS.BAD_GATEWAY, `Refund failed for rental fee: ${stripeErr.message}`, 'PAYMENT_FAILED');
             }
             await client.query(`UPDATE payments SET status = 'refunded' WHERE id = $1`, [rentalPayment.id]);
           }
         }
-        // refund deposit payment intent fully
         if (depositRefund > 0) {
           const depositPayment = payments.find(p => p.type === 'DEPOSIT' && p.status === 'succeeded');
           if (depositPayment) {
             try {
-              await stripe.refunds.create({
-                payment_intent: depositPayment.stripe_payment_intent_id,
+              await paymentProvider.refundPayment({
+                paymentId: depositPayment.provider_payment_id,
                 amount: depositRefund,
                 reason: 'requested_by_customer',
               });
             } catch (stripeErr) {
               await client.query('ROLLBACK');
-              throw new ApiError(HTTP_STATUS.BAD_GATEWAY, `Stripe refund failed for deposit: ${stripeErr.message}`, 'PAYMENT_FAILED');
+              throw new ApiError(HTTP_STATUS.BAD_GATEWAY, `Refund failed for deposit: ${stripeErr.message}`, 'PAYMENT_FAILED');
             }
             await client.query(`UPDATE payments SET status = 'refunded' WHERE id = $1`, [depositPayment.id]);
           }
         }
       } else if (order.status === 'PENDING_PAYMENT') {
-        // cancel payment intents (no capture yet)
         for (const p of payments) {
-          if (p.stripe_payment_intent_id) {
+          if (p.provider_payment_id) {
             try {
-              await stripe.paymentIntents.cancel(p.stripe_payment_intent_id);
+              await paymentProvider.cancelPayment(p.provider_payment_id);
             } catch (e) {
               // ignore cancel errors
             }
@@ -1067,7 +1111,6 @@ export const orderService = {
         await client.query(`UPDATE payments SET status = 'cancelled' WHERE order_id = $1`, [orderId]);
       }
 
-      // release inventory if CONFIRMED (reserved -> available)
       if (order.status === 'CONFIRMED') {
         await client.query(
           `UPDATE inventory SET reserved = reserved - $1, available = available + $1 WHERE product_id = $2`,
@@ -1075,7 +1118,6 @@ export const orderService = {
         );
       }
 
-      // update deposit status if existed
       if (depositPaid > 0) {
         await client.query(
           `UPDATE deposits SET status = 'REFUNDED', refund_amount = $1, settled_at = NOW() WHERE order_id = $2`,
@@ -1083,20 +1125,14 @@ export const orderService = {
         );
       }
 
-      // update order status
-      await client.query(
-        `UPDATE orders SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`,
-        [orderId]
-      );
+      await client.query(`UPDATE orders SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`, [orderId]);
 
-      // order_events
       await client.query(
         `INSERT INTO order_events (order_id, from_status, to_status, actor_role, actor_user_id, note)
          VALUES ($1, $2, 'CANCELLED', $3, $4, $5)`,
         [orderId, order.status, userRole.toUpperCase(), userId, `Order cancelled, refund ${refundPercent}% (${totalRefund} cents)`]
       );
 
-      // enqueue email
       await notificationQueue.add(JOB_NAMES.ORDER_CANCELLED_EMAIL, { orderId, refundPercent, totalRefund });
 
       await client.query('COMMIT');
@@ -1112,7 +1148,6 @@ export const orderService = {
         },
       };
 
-      // store idempotency response
       if (idempotencyKey) {
         await client.query(
           `INSERT INTO idempotency_keys (key, response, expires_at) VALUES ($1, $2, NOW() + INTERVAL '24 hours')`,
@@ -1144,12 +1179,10 @@ export const orderService = {
       }
       const order = orderResult.rows[0];
 
-      // allowed statuses per contract: ACTIVE_RENTAL / HANDED_OVER within report window (assume 24h after handover)
       if (!['ACTIVE_RENTAL', 'HANDED_OVER'].includes(order.status)) {
         throw new ApiError(HTTP_STATUS.CONFLICT, MESSAGES.ORDERS.INVALID_STATE_TRANSITION, 'INVALID_STATE_TRANSITION');
       }
 
-      // optional: check within 24h of handover for HANDED_OVER
       if (order.status === 'HANDED_OVER' && order.actual_handover_time) {
         const hoursSince = (Date.now() - new Date(order.actual_handover_time).getTime()) / 3_600_000;
         if (hoursSince > 24) {
@@ -1157,10 +1190,7 @@ export const orderService = {
         }
       }
 
-      await client.query(
-        `UPDATE orders SET status = 'DISPUTED', updated_at = NOW() WHERE id = $1`,
-        [orderId]
-      );
+      await client.query(`UPDATE orders SET status = 'DISPUTED', updated_at = NOW() WHERE id = $1`, [orderId]);
 
       await client.query(
         `INSERT INTO order_events (order_id, from_status, to_status, actor_role, actor_user_id, note)
@@ -1200,41 +1230,29 @@ export const orderService = {
       }
 
       if (resolution === 'ACCEPT') {
-        // full refund, release inventory
-        const paymentsResult = await client.query(
-          `SELECT * FROM payments WHERE order_id = $1 AND status = 'succeeded'`,
-          [orderId]
-        );
+        const paymentsResult = await client.query(`SELECT * FROM payments WHERE order_id = $1 AND status = 'succeeded'`, [orderId]);
         for (const p of paymentsResult.rows) {
           try {
-            await stripe.refunds.create({
-              payment_intent: p.stripe_payment_intent_id,
+            await paymentProvider.refundPayment({
+              paymentId: p.provider_payment_id,
               amount: p.amount,
               reason: 'requested_by_customer',
             });
           } catch (stripeErr) {
             await client.query('ROLLBACK');
-            throw new ApiError(HTTP_STATUS.BAD_GATEWAY, `Stripe refund failed: ${stripeErr.message}`, 'PAYMENT_FAILED');
+            throw new ApiError(HTTP_STATUS.BAD_GATEWAY, `Refund failed: ${stripeErr.message}`, 'PAYMENT_FAILED');
           }
           await client.query(`UPDATE payments SET status = 'refunded' WHERE id = $1`, [p.id]);
         }
 
-        // release inventory reserved/rented
         await client.query(
           `UPDATE inventory SET reserved = GREATEST(reserved - $1, 0), rented = GREATEST(rented - $1, 0), available = available + $1 WHERE product_id = $2`,
           [order.quantity, order.product_id]
         );
 
-        // deposit refunded
-        await client.query(
-          `UPDATE deposits SET status = 'REFUNDED', refund_amount = amount_held, settled_at = NOW() WHERE order_id = $1`,
-          [orderId]
-        );
+        await client.query(`UPDATE deposits SET status = 'REFUNDED', refund_amount = amount_held, settled_at = NOW() WHERE order_id = $1`, [orderId]);
 
-        await client.query(
-          `UPDATE orders SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`,
-          [orderId]
-        );
+        await client.query(`UPDATE orders SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`, [orderId]);
 
         await client.query(
           `INSERT INTO order_events (order_id, from_status, to_status, actor_role, actor_user_id, note)
@@ -1242,11 +1260,8 @@ export const orderService = {
           [orderId, vendorUserId, `Dispute accepted: ${note}`]
         );
 
-      } else { // REJECT
-        await client.query(
-          `UPDATE orders SET status = 'ACTIVE_RENTAL', updated_at = NOW() WHERE id = $1`,
-          [orderId]
-        );
+      } else {
+        await client.query(`UPDATE orders SET status = 'ACTIVE_RENTAL', updated_at = NOW() WHERE id = $1`, [orderId]);
 
         await client.query(
           `INSERT INTO order_events (order_id, from_status, to_status, actor_role, actor_user_id, note)
@@ -1257,6 +1272,392 @@ export const orderService = {
 
       await client.query('COMMIT');
       return toOrderDTO({ ...order, status: resolution === 'ACCEPT' ? 'CANCELLED' : 'ACTIVE_RENTAL' });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      if (err instanceof ApiError) throw err;
+      throw new ApiError(HTTP_STATUS.INTERNAL_SERVER_ERROR, MESSAGES.SERVER.INTERNAL_ERROR);
+    } finally {
+      client.release();
+    }
+  },
+
+  async verifyPayment(orderId, customerUserId, provider, paymentData) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const orderResult = await client.query(
+        `SELECT * FROM orders WHERE id = $1 AND customer_user_id = $2 FOR UPDATE`,
+        [orderId, customerUserId]
+      );
+      if (orderResult.rows.length === 0) {
+        throw new ApiError(HTTP_STATUS.NOT_FOUND, MESSAGES.ORDERS.ORDER_NOT_FOUND, 'ORDER_NOT_FOUND');
+      }
+      const order = orderResult.rows[0];
+
+      if (order.status !== 'PENDING_PAYMENT') {
+        throw new ApiError(HTTP_STATUS.CONFLICT, MESSAGES.ORDERS.INVALID_STATE_TRANSITION, 'INVALID_STATE_TRANSITION');
+      }
+
+      let verificationResult;
+      if (provider === 'stripe') {
+        verificationResult = await paymentProvider.verifyPayment({
+          paymentIntentIdRental: paymentData.paymentIntentIdRental,
+          paymentIntentIdDeposit: paymentData.paymentIntentIdDeposit,
+        });
+      } else if (provider === 'razorpay') {
+        // Verify both rental and deposit payments
+        const rentalResult = await paymentProvider.verifyPayment({
+          razorpayOrderId: paymentData.razorpayOrderIdRental,
+          razorpayPaymentId: paymentData.razorpayPaymentIdRental,
+          razorpaySignature: paymentData.razorpaySignatureRental,
+        });
+        const depositResult = await paymentProvider.verifyPayment({
+          razorpayOrderId: paymentData.razorpayOrderIdDeposit,
+          razorpayPaymentId: paymentData.razorpayPaymentIdDeposit,
+          razorpaySignature: paymentData.razorpaySignatureDeposit,
+        });
+        verificationResult = { success: rentalResult.success && depositResult.success };
+      } else {
+        throw new ApiError(HTTP_STATUS.BAD_REQUEST, 'Invalid payment provider', 'INVALID_PROVIDER');
+      }
+
+      if (!verificationResult.success) {
+        throw new ApiError(HTTP_STATUS.BAD_REQUEST, 'Payment verification failed', 'VERIFICATION_FAILED');
+      }
+
+      // Update payments status
+      await client.query(`UPDATE payments SET status = 'succeeded' WHERE order_id = $1`, [orderId]);
+
+      // Check if both payments succeeded
+      const paymentsResult = await client.query(`SELECT * FROM payments WHERE order_id = $1`, [orderId]);
+      const allSucceeded = paymentsResult.rows.every(p => p.status === 'succeeded');
+
+      if (allSucceeded) {
+        await client.query(`UPDATE orders SET status = 'CONFIRMED', updated_at = NOW() WHERE id = $1`, [orderId]);
+
+        const pricingResult = await client.query(`SELECT deposit FROM product_pricing WHERE id = $1`, [order.pricing_id]);
+        const depositAmount = pricingResult.rows[0].deposit * order.quantity;
+
+        await client.query(
+          `INSERT INTO deposits (order_id, amount_held, status, method) VALUES ($1, $2, 'HELD', $3)`,
+          [orderId, depositAmount, env.PAYMENT_PROVIDER.toUpperCase()]
+        );
+
+        await client.query(
+          `UPDATE inventory SET available = available - $1, reserved = reserved + $1 WHERE product_id = $2`,
+          [order.quantity, order.product_id]
+        );
+
+        await client.query(
+          `INSERT INTO order_events (order_id, from_status, to_status, actor_role, actor_user_id, note)
+           VALUES ($1, 'PENDING_PAYMENT', 'CONFIRMED', 'SYSTEM', NULL, 'Both rental fee and deposit payments succeeded')`,
+          [orderId]
+        );
+      }
+
+      await client.query('COMMIT');
+      return await this.getOrderById(orderId, customerUserId, 'customer');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      if (err instanceof ApiError) throw err;
+      throw new ApiError(HTTP_STATUS.INTERNAL_SERVER_ERROR, MESSAGES.SERVER.INTERNAL_ERROR);
+    } finally {
+      client.release();
+    }
+  },
+
+  // Quotation methods
+  async createQuotation(vendorUserId, data) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Verify product belongs to vendor and get pricing
+      const productResult = await client.query(
+        `SELECT p.id, p.vendor_user_id, p.status, pp.price, pp.deposit
+         FROM products p
+         JOIN product_pricing pp ON pp.product_id = p.id AND pp.id = $1
+         WHERE p.id = $2 AND p.is_deleted = false
+         FOR SHARE`,
+        [data.pricingId, data.productId]
+      );
+
+      if (productResult.rows.length === 0) {
+        throw new ApiError(HTTP_STATUS.NOT_FOUND, MESSAGES.ORDERS.ORDER_NOT_FOUND, 'ORDER_NOT_FOUND');
+      }
+
+      const product = productResult.rows[0];
+
+      if (product.vendor_user_id !== vendorUserId) {
+        throw new ApiError(HTTP_STATUS.FORBIDDEN, MESSAGES.ORDERS.FORBIDDEN_NOT_OWNER, 'FORBIDDEN_NOT_OWNER');
+      }
+
+      // Determine status based on customerEmail
+      const status = data.customerEmail ? 'SENT' : 'DRAFT';
+
+      const quotationResult = await client.query(
+        `INSERT INTO quotations (vendor_user_id, customer_name, customer_email, customer_user_id, product_id, pricing_id, quantity, rental_period_start, rental_period_end, delivery_type, quoted_amount, status, valid_until)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+         RETURNING *`,
+        [vendorUserId, data.customerName, data.customerEmail, data.customerUserId, data.productId, data.pricingId, data.quantity, data.rentalPeriodStart, data.rentalPeriodEnd, data.deliveryType, data.quotedAmount, status, data.validUntil]
+      );
+
+      const quotation = quotationResult.rows[0];
+
+      // Log warning if quoted amount differs significantly from product pricing
+      const expectedAmount = product.price * data.quantity;
+      const diffPercent = Math.abs(quotation.quoted_amount - expectedAmount) / expectedAmount * 100;
+      if (diffPercent > 20) {
+        await client.query(
+          `INSERT INTO order_events (order_id, from_status, to_status, actor_role, actor_user_id, note)
+           VALUES ($1, NULL, $2, 'VENDOR', $3, $4)`,
+          [quotation.id, quotation.status, vendorUserId, `Quotation amount differs from standard pricing by ${diffPercent.toFixed(1)}%`]
+        );
+      }
+
+      await client.query('COMMIT');
+      return { ...quotation };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      if (err instanceof ApiError) throw err;
+      throw new ApiError(HTTP_STATUS.INTERNAL_SERVER_ERROR, MESSAGES.SERVER.INTERNAL_ERROR);
+    } finally {
+      client.release();
+    }
+  },
+
+  async getQuotations(vendorUserId, query) {
+    const { status, page = 1, limit = 10 } = query;
+    const offset = (page - 1) * limit;
+
+    let whereClause = 'WHERE vendor_user_id = $1';
+    const params = [vendorUserId];
+    let paramIndex = 2;
+
+    if (status) {
+      whereClause += ` AND status = $${paramIndex}`;
+      params.push(status);
+      paramIndex++;
+    }
+
+    const countResult = await pool.query(`SELECT COUNT(*) FROM quotations ${whereClause}`, params);
+    const total = parseInt(countResult.rows[0].count);
+
+    params.push(limit, offset);
+    const quotationsResult = await pool.query(
+      `SELECT * FROM quotations ${whereClause} ORDER BY created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      params
+    );
+
+    return {
+      data: quotationsResult.rows.map(q => ({ ...q })),
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  },
+
+  async getQuotationById(vendorUserId, quotationId) {
+    const result = await pool.query(
+      `SELECT * FROM quotations WHERE id = $1 AND vendor_user_id = $2`,
+      [quotationId, vendorUserId]
+    );
+    if (result.rows.length === 0) {
+      throw new ApiError(HTTP_STATUS.NOT_FOUND, 'Quotation not found', 'QUOTATION_NOT_FOUND');
+    }
+    return { ...result.rows[0] };
+  },
+
+  async updateQuotation(vendorUserId, quotationId, data) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const quotationResult = await client.query(
+        `SELECT * FROM quotations WHERE id = $1 AND vendor_user_id = $2 FOR UPDATE`,
+        [quotationId, vendorUserId]
+      );
+      if (quotationResult.rows.length === 0) {
+        throw new ApiError(HTTP_STATUS.NOT_FOUND, 'Quotation not found', 'QUOTATION_NOT_FOUND');
+      }
+      const quotation = quotationResult.rows[0];
+
+      if (!['DRAFT', 'SENT'].includes(quotation.status)) {
+        throw new ApiError(HTTP_STATUS.CONFLICT, MESSAGES.ORDERS.INVALID_STATE_TRANSITION, 'INVALID_STATE_TRANSITION');
+      }
+
+      // Verify product belongs to vendor if productId is being updated
+      if (data.productId || data.pricingId) {
+        const productId = data.productId || quotation.product_id;
+        const pricingId = data.pricingId || quotation.pricing_id;
+
+        const productResult = await client.query(
+          `SELECT p.vendor_user_id FROM products p JOIN product_pricing pp ON pp.product_id = p.id WHERE pp.id = $1 AND p.id = $2 AND p.is_deleted = false`,
+          [pricingId, productId]
+        );
+        if (productResult.rows.length === 0 || productResult.rows[0].vendor_user_id !== vendorUserId) {
+          throw new ApiError(HTTP_STATUS.FORBIDDEN, MESSAGES.ORDERS.FORBIDDEN_NOT_OWNER, 'FORBIDDEN_NOT_OWNER');
+        }
+      }
+
+      const updates = [];
+      const values = [quotationId];
+      let idx = 2;
+      const fields = ['customerName', 'customerEmail', 'customerUserId', 'productId', 'pricingId', 'quantity', 'rentalPeriodStart', 'rentalPeriodEnd', 'deliveryType', 'quotedAmount', 'validUntil'];
+      for (const field of fields) {
+        if (data[field] !== undefined) {
+          const col = field === 'customerName' ? 'customer_name' :
+                      field === 'customerEmail' ? 'customer_email' :
+                      field === 'customerUserId' ? 'customer_user_id' :
+                      field === 'productId' ? 'product_id' :
+                      field === 'pricingId' ? 'pricing_id' :
+                      field === 'rentalPeriodStart' ? 'rental_period_start' :
+                      field === 'rentalPeriodEnd' ? 'rental_period_end' :
+                      field === 'deliveryType' ? 'delivery_type' :
+                      field === 'quotedAmount' ? 'quoted_amount' :
+                      field === 'validUntil' ? 'valid_until' : field;
+          updates.push(`${col} = $${idx}`);
+          values.push(data[field]);
+          idx++;
+        }
+      }
+      if (updates.length === 0) {
+        throw new ApiError(HTTP_STATUS.BAD_REQUEST, 'No fields to update');
+      }
+      updates.push('updated_at = NOW()');
+
+      await client.query(
+        `UPDATE quotations SET ${updates.join(', ')} WHERE id = $1`,
+        values
+      );
+
+      await client.query('COMMIT');
+
+      const result = await pool.query(`SELECT * FROM quotations WHERE id = $1`, [quotationId]);
+      return { ...result.rows[0] };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      if (err instanceof ApiError) throw err;
+      throw new ApiError(HTTP_STATUS.INTERNAL_SERVER_ERROR, MESSAGES.SERVER.INTERNAL_ERROR);
+    } finally {
+      client.release();
+    }
+  },
+
+  async declineQuotation(vendorUserId, quotationId) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const quotationResult = await client.query(
+        `SELECT * FROM quotations WHERE id = $1 AND vendor_user_id = $2 FOR UPDATE`,
+        [quotationId, vendorUserId]
+      );
+      if (quotationResult.rows.length === 0) {
+        throw new ApiError(HTTP_STATUS.NOT_FOUND, 'Quotation not found', 'QUOTATION_NOT_FOUND');
+      }
+      const quotation = quotationResult.rows[0];
+
+      if (!['DRAFT', 'SENT'].includes(quotation.status)) {
+        throw new ApiError(HTTP_STATUS.CONFLICT, MESSAGES.ORDERS.INVALID_STATE_TRANSITION, 'INVALID_STATE_TRANSITION');
+      }
+
+      await client.query(
+        `UPDATE quotations SET status = 'DECLINED', updated_at = NOW() WHERE id = $1`,
+        [quotationId]
+      );
+
+      await client.query('COMMIT');
+      return { ...quotation, status: 'DECLINED' };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      if (err instanceof ApiError) throw err;
+      throw new ApiError(HTTP_STATUS.INTERNAL_SERVER_ERROR, MESSAGES.SERVER.INTERNAL_ERROR);
+    } finally {
+      client.release();
+    }
+  },
+
+  async confirmQuotation(vendorUserId, quotationId) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const quotationResult = await client.query(
+        `SELECT * FROM quotations WHERE id = $1 AND vendor_user_id = $2 FOR UPDATE`,
+        [quotationId, vendorUserId]
+      );
+      if (quotationResult.rows.length === 0) {
+        throw new ApiError(HTTP_STATUS.NOT_FOUND, 'Quotation not found', 'QUOTATION_NOT_FOUND');
+      }
+      const quotation = quotationResult.rows[0];
+
+      if (!['DRAFT', 'SENT'].includes(quotation.status)) {
+        throw new ApiError(HTTP_STATUS.CONFLICT, MESSAGES.ORDERS.INVALID_STATE_TRANSITION, 'INVALID_STATE_TRANSITION');
+      }
+
+      // Check if valid_until has passed
+      if (quotation.valid_until && new Date(quotation.valid_until) < new Date()) {
+        await client.query(`UPDATE quotations SET status = 'EXPIRED', updated_at = NOW() WHERE id = $1`, [quotationId]);
+        await client.query('COMMIT');
+        throw new ApiError(HTTP_STATUS.CONFLICT, 'Quotation has expired', 'QUOTATION_EXPIRED');
+      }
+
+      // Check inventory availability (current stock, not when quoted)
+      const invResult = await client.query(
+        `SELECT available FROM inventory WHERE product_id = $1 FOR SHARE`,
+        [quotation.product_id]
+      );
+      if (invResult.rows.length === 0 || invResult.rows[0].available < quotation.quantity) {
+        throw new ApiError(HTTP_STATUS.CONFLICT, MESSAGES.ORDERS.INVENTORY_INSUFFICIENT, 'INVENTORY_INSUFFICIENT');
+      }
+
+      // Create the order
+      const orderResult = await client.query(
+        `INSERT INTO orders (customer_user_id, vendor_user_id, product_id, pricing_id, quantity, channel, delivery_type, rental_period_start, rental_period_end, status)
+         VALUES ($1, $2, $3, $4, $5, 'OFFLINE', $6, $7, $8, 'CONFIRMED')
+         RETURNING *`,
+        [quotation.customer_user_id, quotation.vendor_user_id, quotation.product_id, quotation.pricing_id, quotation.quantity, quotation.delivery_type, quotation.rental_period_start, quotation.rental_period_end]
+      );
+      const order = orderResult.rows[0];
+
+      // Update inventory: available -> reserved
+      await client.query(
+        `UPDATE inventory SET available = available - $1, reserved = reserved + $1 WHERE product_id = $2`,
+        [quotation.quantity, quotation.product_id]
+      );
+
+      // Create deposits row (OFFLINE method)
+      const pricingResult = await client.query(`SELECT deposit FROM product_pricing WHERE id = $1`, [quotation.pricing_id]);
+      const depositAmount = pricingResult.rows[0].deposit * quotation.quantity;
+      await client.query(
+        `INSERT INTO deposits (order_id, amount_held, status, method) VALUES ($1, $2, 'HELD', 'OFFLINE')`,
+        [order.id, depositAmount]
+      );
+
+      // Create payment records (OFFLINE, succeeded)
+      await client.query(
+        `INSERT INTO payments (order_id, provider, provider_order_id, provider_payment_id, amount, type, status)
+         VALUES ($1, $2, $3, $4, $5, 'RENTAL_FEE', 'succeeded'), ($1, $2, $6, $7, $8, 'DEPOSIT', 'succeeded')`,
+        [order.id, 'RAZORPAY', 'offline_rental_' + order.id, 'offline_rental_' + order.id, quotation.quoted_amount, 'offline_deposit_' + order.id, 'offline_deposit_' + order.id, depositAmount]
+      );
+
+      // Update quotation
+      await client.query(
+        `UPDATE quotations SET status = 'CONFIRMED', order_id = $1, updated_at = NOW() WHERE id = $2`,
+        [order.id, quotationId]
+      );
+
+      // Order event
+      await client.query(
+        `INSERT INTO order_events (order_id, from_status, to_status, actor_role, actor_user_id, note)
+         VALUES ($1, NULL, 'CONFIRMED', 'VENDOR', $2, $3)`,
+        [order.id, vendorUserId, `Converted from quotation ${quotationId}`]
+      );
+
+      await notificationQueue.add(JOB_NAMES.ORDER_CONFIRMED_EMAIL, { orderId: order.id, vendorUserId });
+
+      await client.query('COMMIT');
+      return await this.getOrderById(order.id, order.customer_user_id, 'customer');
     } catch (err) {
       await client.query('ROLLBACK');
       if (err instanceof ApiError) throw err;

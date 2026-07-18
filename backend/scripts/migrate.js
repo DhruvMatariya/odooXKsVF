@@ -40,16 +40,38 @@ async function runMigrations() {
       console.log(`Running migration: ${file}`);
       const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf-8');
       
-      await client.query('BEGIN');
-      try {
-        await client.query(sql);
+      // Check if migration contains ALTER TYPE ... ADD VALUE (must run outside transaction)
+      const needsNoTransaction = /\bALTER TYPE\b.*\bADD VALUE\b/i.test(sql);
+      
+      if (needsNoTransaction) {
+        // Run each statement separately without transaction
+        const statements = sql.split(';').map(s => s.trim()).filter(s => s.length > 0);
+        for (const stmt of statements) {
+          try {
+            await client.query(stmt);
+          } catch (err) {
+            // Ignore "already exists" errors for enum values
+            if (err.message.includes('already exists') || err.message.includes('duplicate')) {
+              console.log(`  ⊙ Skipped (already exists): ${stmt.substring(0, 80)}...`);
+            } else {
+              throw err;
+            }
+          }
+        }
         await client.query('INSERT INTO migrations (filename) VALUES ($1)', [file]);
-        await client.query('COMMIT');
         console.log(`  ✓ Completed: ${file}`);
-      } catch (err) {
-        await client.query('ROLLBACK');
-        console.error(`  ✗ Failed: ${file}`);
-        throw err;
+      } else {
+        await client.query('BEGIN');
+        try {
+          await client.query(sql);
+          await client.query('INSERT INTO migrations (filename) VALUES ($1)', [file]);
+          await client.query('COMMIT');
+          console.log(`  ✓ Completed: ${file}`);
+        } catch (err) {
+          await client.query('ROLLBACK');
+          console.error(`  ✗ Failed: ${file}`);
+          throw err;
+        }
       }
     }
 

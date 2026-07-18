@@ -132,3 +132,90 @@ export async function deletePricing(pricingId: string) {
     method: 'DELETE',
   });
 }
+
+export interface CreateOrderData {
+  productId: string;
+  pricingId: string;
+  quantity: number;
+  channel: 'ONLINE' | 'OFFLINE';
+  deliveryType: 'PICKUP' | 'DELIVERY';
+  rentalPeriodStart: string;
+  rentalPeriodEnd: string;
+}
+
+export interface CreateOrderResponse {
+  order: {
+    id: string;
+    customerUserId: string;
+    vendorUserId: string;
+    productId: string;
+    pricingId: string;
+    quantity: number;
+    channel: string;
+    status: string;
+    deliveryType: string;
+    rentalPeriodStart: string;
+    rentalPeriodEnd: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+  razorpayOrderIdRental: string;
+  razorpayOrderIdDeposit: string;
+  razorpayKeyId: string;
+}
+
+export async function createOrder(data: CreateOrderData, idempotencyKey?: string) {
+  const headers: Record<string, string> = {};
+  if (idempotencyKey) {
+    headers['Idempotency-Key'] = idempotencyKey;
+  }
+  return apiFetch<CreateOrderResponse>('/orders', {
+    method: 'POST',
+    body: JSON.stringify(data),
+    headers,
+  });
+}
+
+export interface VerifyPaymentData {
+  provider: 'razorpay';
+  razorpayOrderIdRental: string;
+  razorpayPaymentIdRental: string;
+  razorpaySignatureRental: string;
+  razorpayOrderIdDeposit: string;
+  razorpayPaymentIdDeposit: string;
+  razorpaySignatureDeposit: string;
+}
+
+export async function verifyPayment(orderId: string, data: VerifyPaymentData) {
+  return apiFetch(`/orders/${orderId}/verify-payment`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export interface RetryPaymentResponse {
+  order: {
+    id: string;
+    customerUserId: string;
+    vendorUserId: string;
+    productId: string;
+    pricingId: string;
+    quantity: number;
+    channel: string;
+    status: string;
+    deliveryType: string;
+    rentalPeriodStart: string;
+    rentalPeriodEnd: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+  razorpayOrderIdRental: string;
+  razorpayOrderIdDeposit: string;
+  razorpayKeyId: string;
+}
+
+export async function retryPayment(orderId: string) {
+  return apiFetch<RetryPaymentResponse>(`/orders/${orderId}/retry-payment`, {
+    method: 'POST',
+  });
+}

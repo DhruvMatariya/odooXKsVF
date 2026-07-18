@@ -1,23 +1,46 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { PRODUCTS } from '../../lib/mockData';
 import { Pagination } from '../../components/shared/Pagination';
 import { Plus, Edit2, Trash2, Package, BarChart3 } from 'lucide-react';
 import { toast } from 'sonner';
+import { listProducts, deleteProduct } from '../../lib/api';
 
 const PAGE_SIZE = 8;
 
 export function ProductList() {
   const [page, setPage] = useState(1);
-  const [products, setProducts] = useState(PRODUCTS);
+  const [products, setProducts] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const total = products.length;
-  const paged = products.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => {
+    loadProducts();
+  }, [page]);
 
-  function handleDelete(id: string) {
-    setProducts(ps => ps.map(p => p.id === id ? { ...p, status: 'INACTIVE' as const } : p));
-    toast.success('Product marked as inactive');
+  async function loadProducts() {
+    setLoading(true);
+    try {
+      const res = await listProducts({ page, limit: PAGE_SIZE });
+      if (res.data) {
+        setProducts(res.data.data || []);
+        setTotal(res.data.meta?.total || 0);
+      }
+    } catch (e) {
+      toast.error('Failed to load products');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    try {
+      await deleteProduct(id);
+      toast.success('Product deleted');
+      loadProducts();
+    } catch (e) {
+      toast.error('Failed to delete product');
+    }
   }
 
   return (
@@ -45,10 +68,10 @@ export function ProductList() {
             </tr>
           </thead>
           <tbody>
-            {paged.map((product, idx) => {
+            {products.map((product, idx) => {
               const isInactive = product.status === 'INACTIVE';
               return (
-                <tr key={product.id} style={{ borderBottom: idx < paged.length - 1 ? '1px solid #E4E7E2' : 'none', opacity: isInactive ? 0.55 : 1 }}>
+                <tr key={product.id} style={{ borderBottom: idx < products.length - 1 ? '1px solid #E4E7E2' : 'none', opacity: isInactive ? 0.55 : 1 }}>
                   <td style={{ padding: '14px 16px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <img src={product.thumbnail} alt={product.name} style={{ width: '44px', height: '34px', objectFit: 'cover', borderRadius: '5px', flexShrink: 0, filter: isInactive ? 'grayscale(1)' : 'none' }} />

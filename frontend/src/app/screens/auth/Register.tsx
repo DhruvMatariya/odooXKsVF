@@ -1,21 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import type { UserRole } from '../../lib/types';
-import { useAuth } from '../../lib/AuthContext';
 import { User, Building2, Check, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { apiFetch } from '../../lib/api';
 
-// Matches POST /api/v1/auth/register — discriminated union on role
-// Customer: { role, fullName, email, password }
-// Vendor:   { role, fullName, email, password, companyName, gstNumber, productCategory }
-
-const CATEGORIES = [
-  'Cameras & Photography', 'Power Tools', 'Party & Events',
-  'Vehicles & Mobility', 'Electronics', 'Sports & Outdoor',
-  'Furniture & Decor', 'Musical Instruments',
-];
+const CATEGORIES_API = '/categories';
 
 export function Register() {
+  const [categories, setCategories] = useState<string[]>([]);
   const [role, setRole] = useState<UserRole | null>(null);
   const [form, setForm] = useState({
     fullName: '', email: '', password: '', address: '',
@@ -23,8 +16,22 @@ export function Register() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    async function fetchCategories() {
+      try {
+        const json = await apiFetch<{ id: string; name: string }[]>(CATEGORIES_API);
+        if (json.data) {
+          setCategories(json.data.map((c) => c.name).filter(Boolean));
+        }
+      } catch {
+        setCategories([]);
+      }
+    }
+
+    fetchCategories();
+  }, []);
 
   function update(field: string, value: string) {
     setForm(f => ({ ...f, [field]: value }));
@@ -34,21 +41,28 @@ export function Register() {
     e.preventDefault();
     if (!role) return;
     setLoading(true);
-    await new Promise(r => setTimeout(r, 700));
 
-    login({
-      id: `usr-${Date.now()}`,
-      fullName: form.fullName,
-      email: form.email,
-      role,
-      address: role === 'CUSTOMER' ? form.address : undefined,
-      companyName: role === 'VENDOR' ? form.companyName : undefined,
-      gstNumber: role === 'VENDOR' ? form.gstNumber : undefined,
-      productCategory: role === 'VENDOR' ? form.productCategory : undefined,
-    });
-    toast.success('Account created successfully!');
-    navigate(role === 'VENDOR' ? '/vendor/dashboard' : '/customer/products');
-    setLoading(false);
+    try {
+      const payload: any = {
+        full_name: form.fullName,
+        email: form.email.trim(),
+        password: form.password,
+        role,
+      };
+
+      // For vendor, we will create profile after login, so just register as vendor
+      await apiFetch('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      toast.success('Account created! Please verify your email.');
+      navigate('/verify-email', { state: { email: form.email.trim() } });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Registration failed');
+    } finally {
+      setLoading(false);
+    }
   }
 
   // Step 1 — choose role
@@ -67,13 +81,13 @@ export function Register() {
             icon={<User size={22} color="#738A6E" />}
             title="Customer"
             description="Browse and rent products from vendors"
-            onClick={() => setRole('CUSTOMER')}
+            onClick={() => setRole('customer')}
           />
           <RoleCard
             icon={<Building2 size={22} color="#738A6E" />}
             title="Vendor"
             description="List products, manage inventory and orders"
-            onClick={() => setRole('VENDOR')}
+            onClick={() => setRole('vendor')}
           />
         </div>
         <br></br>
@@ -159,7 +173,7 @@ export function Register() {
                 <Field label="Product Category">
                   <select value={form.productCategory} onChange={e => update('productCategory', e.target.value)} required={role === 'VENDOR'} style={inputStyle}>
                     <option value="">Select your primary category</option>
-                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </Field>
               </div>

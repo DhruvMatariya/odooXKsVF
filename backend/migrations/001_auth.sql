@@ -11,6 +11,7 @@
         password_hash TEXT NOT NULL,
         role user_role DEFAULT 'customer',
         email_verified BOOLEAN DEFAULT FALSE,
+        Address 
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
     );

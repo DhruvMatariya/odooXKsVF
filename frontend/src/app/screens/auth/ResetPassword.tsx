@@ -1,12 +1,15 @@
 import { useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { apiFetch } from '../../lib/api';
 
 export function ResetPassword() {
+  const [params] = useSearchParams();
   const [form, setForm] = useState({ newPassword: '', confirmPassword: '' });
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
+  const token = params.get('token');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -14,10 +17,22 @@ export function ResetPassword() {
       toast.error('Passwords do not match');
       return;
     }
+    if (!token) {
+      toast.error('Reset token is missing');
+      return;
+    }
     setLoading(true);
-    await new Promise(r => setTimeout(r, 700));
-    setDone(true);
-    setLoading(false);
+    try {
+      await apiFetch('/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify({ token, password: form.newPassword }),
+      });
+      setDone(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to reset password');
+    } finally {
+      setLoading(false);
+    }
   }
 
   if (done) {

@@ -175,12 +175,12 @@ export function LandingPage() {
             <p style={{ fontSize: '16px', color: t.textMuted, maxWidth: '500px', margin: '0 auto' }}>Everything you need to run a modern, end-to-end rental business.</p>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
-            <FeatureCard icon={<ShieldCheck size={22} />} title="Automated Deposits" desc="Hold deposits securely via Stripe. Automatically deduct late fees or damages based on your custom rules." t={t} />
-            <FeatureCard icon={<PackageOpen size={22} />} title="Live Inventory Sync" desc="Real-time syncing. When an item is booked, inventory instantly locks to prevent double-booking." t={t} />
+            <FeatureCard icon={<ShieldCheck size={22} />} title="Automated Deposits" desc="Hold deposits securely via RazorPay. Automatically deduct late fees or damages based on your custom rules." t={t} />
+            <FeatureCard icon={<PackageOpen size={22} />} title="Live Inventory Sync" desc="Real time syncing. When an item is booked, inventory instantly locks to prevent double booking." t={t} />
             <FeatureCard icon={<BarChart3 size={22} />} title="Vendor Analytics" desc="Track revenue, monitor active rentals, and manage your equipment pipeline from a single dashboard." t={t} />
             <FeatureCard icon={<TrendingUp size={22} />} title="Order Lifecycle" desc="Full order lifecycle from PENDING_PAYMENT to COMPLETED with automated state transitions and audit logs." t={t} />
-            <FeatureCard icon={<Clock size={22} />} title="Late Fee Engine" desc="Configure grace periods, hourly or daily rate types, and max caps. Penalties auto-calculate on inspection." t={t} />
-            <FeatureCard icon={<Users size={22} />} title="Multi-Role Access" desc="Separate portals for customers and vendors. Role-based access ensures every user sees only what they need." t={t} />
+            <FeatureCard icon={<Clock size={22} />} title="Late Fee Engine" desc="Configure grace periods, hourly or daily rate types, and max caps. Penalties auto calculate on inspection." t={t} />
+            <FeatureCard icon={<Users size={22} />} title="Multi Role Access" desc="Separate portals for customers and vendors. Role based access ensures every user sees only what they need." t={t} />
           </div>
         </section>
 
@@ -196,12 +196,12 @@ export function LandingPage() {
                Managing rentals, deposits, and returns across dozens of products is chaotic without the right tools. Rentsure is the infrastructure that makes it simple, transparent, and scalable.
               </p>
               <p style={{ fontSize: '16px', color: t.textMuted, lineHeight: 1.7, marginBottom: '24px' }}>
-               One end-to-end order lifecycle connects customers and vendors — deposits are held and refunded automatically via Stripe, and late fees are calculated the instant an item is returned.
+               One end-to-end order lifecycle connects customers and vendors deposits are held and refunded automatically via RazorPay, and late fees are calculated the instant an item is returned.
               </p>
 
 
 
-              {['Full order audit trail via order events', 'Stripe-powered deposit hold & refund', 'BullMQ background jobs for reminders', 'Socket.IO for real-time dashboard updates'].map(item => (
+              {['Full order audit trail via order events', 'RazorPay powered deposit hold & refund', 'BullMQ background jobs for reminders', 'Socket.IO for real time dashboard updates'].map(item => (
                 <div key={item} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
                   <CheckCircle size={16} color={t.accent} />
                   <span style={{ fontSize: '14px', color: t.textMuted }}>{item}</span>

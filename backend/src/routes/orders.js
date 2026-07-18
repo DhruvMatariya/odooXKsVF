@@ -23,6 +23,7 @@ import {
   listOrders,
   dispatchOrder,
   confirmDelivery,
+  resolveReplacement,
 } from '../controllers/order.controller.js';
 
 const router = express.Router();
@@ -35,9 +36,7 @@ router.post('/vendor/orders', authenticateUser, authorizeRoles('vendor'), valida
 router.post('/orders/:id/dispatch', authenticateUser, authorizeRoles('vendor'), validate(orderIdParamSchema), dispatchOrder);
 router.post('/orders/:id/confirm-delivery', authenticateUser, authorizeRoles('customer'), validate(confirmDeliverySchema), confirmDelivery);
 
-router.post('/orders/:id/resolve-replacement', authenticateUser, authorizeRoles('vendor'), validate(resolveReplacementSchema), async (req, res) => {
-  res.status(501).json({ success: false, error: { code: 'NOT_IMPLEMENTED', message: 'Resolve replacement not implemented yet' } });
-});
+router.post('/orders/:id/resolve-replacement', authenticateUser, authorizeRoles('vendor'), validate(resolveReplacementSchema), resolveReplacement);
 
 router.post('/orders/:id/return-slot', authenticateUser, authorizeRoles('customer'), validate(returnSlotSchema), async (req, res) => {
   res.status(501).json({ success: false, error: { code: 'NOT_IMPLEMENTED', message: 'Return slot not implemented yet' } });

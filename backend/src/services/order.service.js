@@ -4,6 +4,7 @@ import ApiError from '../utils/ApiError.js';
 import { HTTP_STATUS } from '../config/constant.js';
 import { MESSAGES } from '../config/messages.js';
 import env from '../config/env.js';
+import { notificationQueue, JOB_NAMES } from '../queues/notificationQueue.js';
 
 const stripe = new Stripe(env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
 
@@ -427,7 +428,10 @@ export const orderService = {
         [orderId, vendorUserId]
       );
 
+      await notificationQueue.add(JOB_NAMES.DISPATCH_NOTIFICATION_EMAIL, { orderId, vendorUserId });
+
       await client.query('COMMIT');
+      await notificationQueue.add(JOB_NAMES.DISPATCH_NOTIFICATION_EMAIL, { orderId, vendorUserId });
       return toOrderDTO({ ...order, status: 'DISPATCHED' });
     } catch (err) {
       await client.query('ROLLBACK');
@@ -472,10 +476,39 @@ export const orderService = {
            VALUES ($1, 'DISPATCHED', 'HANDED_OVER', 'CUSTOMER', $2, 'Customer accepted delivery')`,
           [orderId, customerUserId]
         );
+
+        await notificationQueue.add(JOB_NAMES.HANDOVER_CONFIRMED_EMAIL, { orderId, customerUserId });
+
+        await client.query('COMMIT');
+        return toOrderDTO({ ...order, status: 'HANDED_OVER', actual_handover_time: new Date() });
       } else {
         const isRefund = data.resolution === 'REFUND';
 
         if (isRefund) {
+          // Fetch both payment intents for this order
+          const paymentsResult = await client.query(
+            `SELECT stripe_payment_intent_id, type FROM payments WHERE order_id = $1`,
+            [orderId]
+          );
+          // Attempt Stripe refunds for both
+          for (const payment of paymentsResult.rows) {
+            try {
+              await stripe.refunds.create({
+                payment_intent: payment.stripe_payment_intent_id,
+                reason: 'requested_by_customer',
+              });
+            } catch (stripeErr) {
+              await client.query('ROLLBACK');
+              throw new ApiError(HTTP_STATUS.BAD_GATEWAY, `Stripe refund failed for ${payment.type}: ${stripeErr.message}`, 'PAYMENT_FAILED');
+            }
+          }
+
+          // Update payments status
+          await client.query(
+            `UPDATE payments SET status = 'refunded' WHERE order_id = $1`,
+            [orderId]
+          );
+
           await client.query(
             `UPDATE orders SET status = 'REJECTED_AT_DELIVERY', updated_at = NOW() WHERE id = $1`,
             [orderId]
@@ -491,7 +524,13 @@ export const orderService = {
              VALUES ($1, 'DISPATCHED', 'REJECTED_AT_DELIVERY', 'CUSTOMER', $2, $3)`,
             [orderId, customerUserId, `Customer rejected delivery: ${data.reason}`]
           );
+
+          await notificationQueue.add(JOB_NAMES.DELIVERY_REJECTED_REFUND_EMAIL, { orderId, customerUserId, reason: data.reason });
+
+          await client.query('COMMIT');
+          return toOrderDTO({ ...order, status: 'REJECTED_AT_DELIVERY' });
         } else {
+          // REPLACE branch
           await client.query(
             `UPDATE orders SET status = 'REPLACEMENT_REQUESTED', updated_at = NOW() WHERE id = $1`,
             [orderId]
@@ -502,11 +541,138 @@ export const orderService = {
              VALUES ($1, 'DISPATCHED', 'REPLACEMENT_REQUESTED', 'CUSTOMER', $2, $3)`,
             [orderId, customerUserId, `Customer requested replacement: ${data.reason}`]
           );
+
+          await notificationQueue.add(JOB_NAMES.REPLACEMENT_REQUESTED_EMAIL, { orderId, vendorUserId: order.vendor_user_id, reason: data.reason });
+
+          await client.query('COMMIT');
+          return toOrderDTO({ ...order, status: 'REPLACEMENT_REQUESTED' });
         }
       }
+    } catch (err) {
+      await client.query('ROLLBACK');
+      if (err instanceof ApiError) throw err;
+      throw new ApiError(HTTP_STATUS.INTERNAL_SERVER_ERROR, MESSAGES.SERVER.INTERNAL_ERROR);
+    } finally {
+      client.release();
+    }
+  },
 
-      await client.query('COMMIT');
-      return toOrderDTO({ ...order, status: data.decision === 'ACCEPT' ? 'HANDED_OVER' : (data.resolution === 'REFUND' ? 'REJECTED_AT_DELIVERY' : 'REPLACEMENT_REQUESTED') });
+  async resolveReplacement(orderId, vendorUserId, resolution) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const orderResult = await client.query(
+        `SELECT * FROM orders WHERE id = $1 AND vendor_user_id = $2 FOR UPDATE`,
+        [orderId, vendorUserId]
+      );
+      if (orderResult.rows.length === 0) {
+        throw new ApiError(HTTP_STATUS.NOT_FOUND, MESSAGES.ORDERS.ORDER_NOT_FOUND, 'ORDER_NOT_FOUND');
+      }
+      const order = orderResult.rows[0];
+
+      if (order.status !== 'REPLACEMENT_REQUESTED') {
+        throw new ApiError(HTTP_STATUS.CONFLICT, MESSAGES.ORDERS.INVALID_STATE_TRANSITION, 'INVALID_STATE_TRANSITION');
+      }
+
+      if (resolution === 'REDISPATCH') {
+        // Check inventory availability for this product
+        const invResult = await client.query(
+          `SELECT available FROM inventory WHERE product_id = $1 FOR SHARE`,
+          [order.product_id]
+        );
+        if (invResult.rows.length === 0 || invResult.rows[0].available < order.quantity) {
+          // Not enough stock, force REFUND
+          // Perform refund logic similar to reject+refund
+          const paymentsResult = await client.query(
+            `SELECT stripe_payment_intent_id, type FROM payments WHERE order_id = $1`,
+            [orderId]
+          );
+          for (const payment of paymentsResult.rows) {
+            try {
+              await stripe.refunds.create({
+                payment_intent: payment.stripe_payment_intent_id,
+                reason: 'requested_by_customer',
+              });
+            } catch (stripeErr) {
+              await client.query('ROLLBACK');
+              throw new ApiError(HTTP_STATUS.BAD_GATEWAY, `Stripe refund failed for ${payment.type}: ${stripeErr.message}`, 'PAYMENT_FAILED');
+            }
+          }
+          await client.query(`UPDATE payments SET status = 'refunded' WHERE order_id = $1`, [orderId]);
+
+          await client.query(
+            `UPDATE orders SET status = 'REJECTED_AT_DELIVERY', updated_at = NOW() WHERE id = $1`,
+            [orderId]
+          );
+          await client.query(
+            `UPDATE inventory SET reserved = reserved - $1, available = available + $1 WHERE product_id = $2`,
+            [order.quantity, order.product_id]
+          );
+          await client.query(
+            `INSERT INTO order_events (order_id, from_status, to_status, actor_role, actor_user_id, note)
+             VALUES ($1, 'REPLACEMENT_REQUESTED', 'REJECTED_AT_DELIVERY', 'VENDOR', $2, 'Insufficient inventory for replacement, forced refund')`,
+            [orderId, vendorUserId]
+          );
+
+          await notificationQueue.add(JOB_NAMES.DELIVERY_REJECTED_REFUND_EMAIL, { orderId, vendorUserId, reason: 'Insufficient inventory for replacement' });
+
+          await client.query('COMMIT');
+          return { order: toOrderDTO({ ...order, status: 'REJECTED_AT_DELIVERY' }), message: 'Insufficient inventory for replacement; refund processed instead.' };
+        }
+
+        // Inventory available, loop back to DISPATCHED
+        await client.query(
+          `UPDATE orders SET status = 'DISPATCHED', updated_at = NOW() WHERE id = $1`,
+          [orderId]
+        );
+        await client.query(
+          `INSERT INTO order_events (order_id, from_status, to_status, actor_role, actor_user_id, note)
+           VALUES ($1, 'REPLACEMENT_REQUESTED', 'DISPATCHED', 'VENDOR', $2, 'Replacement dispatched')`,
+          [orderId, vendorUserId]
+        );
+
+        await notificationQueue.add(JOB_NAMES.DISPATCH_NOTIFICATION_EMAIL, { orderId, vendorUserId });
+
+        await client.query('COMMIT');
+        return { order: toOrderDTO({ ...order, status: 'DISPATCHED' }), message: 'Replacement dispatched' };
+      } else { // REFUND
+        const paymentsResult = await client.query(
+          `SELECT stripe_payment_intent_id, type FROM payments WHERE order_id = $1`,
+          [orderId]
+        );
+        for (const payment of paymentsResult.rows) {
+          try {
+            await stripe.refunds.create({
+              payment_intent: payment.stripe_payment_intent_id,
+              reason: 'requested_by_customer',
+            });
+          } catch (stripeErr) {
+            await client.query('ROLLBACK');
+            throw new ApiError(HTTP_STATUS.BAD_GATEWAY, `Stripe refund failed for ${payment.type}: ${stripeErr.message}`, 'PAYMENT_FAILED');
+          }
+        }
+        await client.query(`UPDATE payments SET status = 'refunded' WHERE order_id = $1`, [orderId]);
+
+        await client.query(
+          `UPDATE orders SET status = 'REJECTED_AT_DELIVERY', updated_at = NOW() WHERE id = $1`,
+          [orderId]
+        );
+        await client.query(
+          `UPDATE inventory SET reserved = reserved - $1, available = available + $1 WHERE product_id = $2`,
+          [order.quantity, order.product_id]
+        );
+        await client.query(
+          `INSERT INTO order_events (order_id, from_status, to_status, actor_role, actor_user_id, note)
+           VALUES ($1, 'REPLACEMENT_REQUESTED', 'REJECTED_AT_DELIVERY', 'VENDOR', $2, 'Vendor chose refund for replacement')`,
+          [orderId, vendorUserId]
+        );
+
+        await notificationQueue.add(JOB_NAMES.DELIVERY_REJECTED_REFUND_EMAIL, { orderId, vendorUserId, reason: 'Vendor chose refund for replacement' });
+
+        await client.query('COMMIT');
+        return { order: toOrderDTO({ ...order, status: 'REJECTED_AT_DELIVERY' }), message: 'Refund processed for replacement' };
+      }
     } catch (err) {
       await client.query('ROLLBACK');
       if (err instanceof ApiError) throw err;

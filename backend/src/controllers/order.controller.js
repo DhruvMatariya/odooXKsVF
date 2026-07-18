@@ -112,4 +112,14 @@ export const orderController = {
       data: toOrderResponseDTO(order),
     });
   },
+
+  async resolveReplacement(req, res) {
+    const vendorUserId = req.user.sub;
+    const result = await orderService.resolveReplacement(req.validated.params.id, vendorUserId, req.validated.body.resolution);
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: result.message || 'Replacement resolved',
+      data: toOrderResponseDTO(result.order),
+    });
+  },
 };

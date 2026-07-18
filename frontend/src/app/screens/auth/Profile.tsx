@@ -38,7 +38,7 @@ export function Profile() {
   if (!user) return null;
 
   return (
-    <div style={{ maxWidth: '560px' }}>
+    <div style={{ width: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px' }}>
         <div>
           <h1 style={{ color: '#344C3D', fontWeight: 700, fontSize: '22px', marginBottom: '4px' }}>Profile</h1>

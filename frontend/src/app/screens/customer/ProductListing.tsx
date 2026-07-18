@@ -169,14 +169,17 @@ export function ProductListing() {
         <EmptyState message="No products match your filters." />
       ) : viewMode === 'grid' ? (
         /* ── GRID VIEW ── */
-        <div key={transitionKey} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', marginBottom: '8px' }}>
+        <div key={transitionKey} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', gridAutoRows: '1fr', marginBottom: '8px' }}>
           {paged.map((product, idx) => {
             const startingPrice = product.startingPrice || 0;
             const isUnavailable = product.inventory?.available === 0;
             return (
-              <Link key={product.id} to={`/customer/products/${product.id}`} style={{ textDecoration: 'none', animation: `cardFadeIn 0.4s ease both`, animationDelay: `${idx * 55}ms` }}>
+              <Link key={product.id} to={`/customer/products/${product.id}`} style={{ display: 'block', height: '100%', textDecoration: 'none', animation: `cardFadeIn 0.4s ease both`, animationDelay: `${idx * 55}ms` }}>
                 <div
                   style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    height: '100%',
                     background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(12px)',
                     border: '1px solid rgba(115,138,110,0.15)', borderRadius: '18px',
                     overflow: 'hidden', cursor: 'pointer',
@@ -219,9 +222,11 @@ export function ProductListing() {
                       <span style={{ fontSize: '17px', fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>{formatPrice(startingPrice)}</span>
                     </div>
                   </div>
-                  <div style={{ padding: '14px 16px' }}>
-                    <div style={{ fontWeight: 700, color: '#344C3D', fontSize: '14px', marginBottom: '3px', lineHeight: 1.35 }}>{product.name}</div>
-                    <div style={{ fontSize: '11px', color: '#8EA58C', marginBottom: '12px' }}>{product.brand} · {product.vendorName}</div>
+                  <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1 }}>
+                    <div>
+                      <div style={{ fontWeight: 700, color: '#344C3D', fontSize: '14px', marginBottom: '3px', lineHeight: 1.35 }}>{product.name}</div>
+                      <div style={{ fontSize: '11px', color: '#8EA58C', marginBottom: '12px' }}>{product.brand} · {product.vendorName}</div>
+                    </div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <span style={{ fontSize: '11px', fontWeight: 600, color: isUnavailable ? '#C97B3D' : '#4a6848' }}>
                         {isUnavailable ? 'Out of stock' : `${product.inventory?.available} available`}

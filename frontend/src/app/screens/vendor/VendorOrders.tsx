@@ -87,7 +87,7 @@ export function VendorOrders() {
                   </td>
                   <Td>{order.quantity}</Td>
                   <td style={{ padding: '14px 16px' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 600, padding: '2px 7px', borderRadius: '4px', background: order.channel === 'ONLINE' ? 'rgba(115,138,110,0.1)' : 'rgba(201,123,61,0.1)', color: order.channel === 'ONLINE' ? '#4a6848' : '#C97B3D' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: order.channel === 'ONLINE' ? '#4a6848' : '#C97B3D' }}>
                       {order.channel}
                     </span>
                   </td>

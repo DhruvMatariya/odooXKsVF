@@ -5,45 +5,37 @@ import { Edit2, Check, X } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
 
 export function Profile() {
-  const { user, logout } = useAuth();
-  const [creatingVendorProfile, setCreatingVendorProfile] = useState(false);
-  const [vendorForm, setVendorForm] = useState({
-    gstNumber: '',
-    companyName: '',
-    productCategory: '',
+  const { user, login } = useAuth();
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({
+    fullName: user?.fullName ?? '',
+    companyName: user?.companyName ?? '',
+    gstNumber: user?.gstNumber ?? '',
+    productCategory: user?.productCategory ?? '',
+    address: user?.address ?? '',
   });
-  const [categories, setCategories] = useState<string[]>([]);
 
-  useEffect(() => {
-    async function fetchCategories() {
-      try {
-        const res = await apiFetch<{ id: string; name: string }[]>('/categories');
-        if (res.data) {
-          setCategories(res.data.map(c => c.name));
-        }
-      } catch {}
-    }
-    fetchCategories();
-  }, []);
+  function update(field: string, value: string) {
+    setForm(f => ({ ...f, [field]: value }));
+  }
 
-  async function handleCreateVendorProfile(e: React.FormEvent) {
-    e.preventDefault();
-    try {
-      await apiFetch('/auth/profile', {
-        method: 'POST',
-        body: JSON.stringify({
-          gst_number: vendorForm.gstNumber,
-          company_name: vendorForm.companyName,
-          product_category: vendorForm.productCategory,
-        }),
-      });
-      toast.success('Vendor profile created successfully');
-      setCreatingVendorProfile(false);
-      // Refresh user data
-      window.location.reload();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to create vendor profile');
-    }
+  async function handleSave() {
+    if (!user) return;
+    await new Promise(r => setTimeout(r, 400));
+    login({ ...user, ...form });
+    toast.success('Profile updated successfully');
+    setEditing(false);
+  }
+
+  function handleCancel() {
+    setForm({
+      fullName: user?.fullName ?? '',
+      companyName: user?.companyName ?? '',
+      gstNumber: user?.gstNumber ?? '',
+      productCategory: user?.productCategory ?? '',
+      address: user?.address ?? '',
+    });
+    setEditing(false);
   }
 
   if (!user) return null;
@@ -82,6 +74,13 @@ export function Profile() {
                 {user.role}
               </span>
             </ProfileField>
+            {user.role === 'CUSTOMER' && (
+              <ProfileField label="Address" editing={editing}>
+                {editing
+                  ? <textarea value={form.address} onChange={e => update('address', e.target.value)} style={{ ...inputStyle, resize: 'vertical' }} rows={3} />
+                  : <span style={{ whiteSpace: 'pre-line', lineHeight: 1.5 }}>{user.address || 'No address provided'}</span>}
+              </ProfileField>
+            )}
           </div>
         </div>
 

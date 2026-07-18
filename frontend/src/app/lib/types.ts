@@ -5,18 +5,10 @@ export interface User {
   full_name: string;
   email: string;
   role: UserRole;
-  email_verified: boolean;
-  created_at: string;
-  updated_at: string;
-  vendorProfile?: {
-    id: string;
-    user_id: string;
-    gst_number: string;
-    company_name: string;
-    product_category: string;
-    created_at: string;
-    updated_at: string;
-  };
+  companyName?: string;
+  gstNumber?: string;
+  productCategory?: string;
+  address?: string;
 }
 
 export interface Category {

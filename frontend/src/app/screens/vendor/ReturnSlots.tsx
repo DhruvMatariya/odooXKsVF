@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { RETURN_SLOTS } from '../../lib/mockData';
 import type { ReturnSlot } from '../../lib/types';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDate } from '../../lib/utils';
 
@@ -10,9 +10,11 @@ const SLOT_ORDER = ['MORNING', 'AFTERNOON', 'EVENING'] as const;
 export function ReturnSlots() {
   const [slots, setSlots] = useState<ReturnSlot[]>(RETURN_SLOTS);
   const [showAdd, setShowAdd] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const [form, setForm] = useState({ date: '', slotLabel: 'MORNING' as 'MORNING' | 'AFTERNOON' | 'EVENING', capacity: 10 });
 
   const dates = [...new Set(slots.map(s => s.date))].sort();
+  const visibleDates = showAll ? dates : dates.slice(0, 2);
 
   function handleAdd() {
     const newSlot: ReturnSlot = { id: `rs-${Date.now()}`, ...form, bookedCount: 0 };
@@ -72,21 +74,21 @@ export function ReturnSlots() {
       )}
 
       {/* Date-based calendar view */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        {dates.map(date => {
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        {visibleDates.map(date => {
           const dateSlots = slots.filter(s => s.date === date);
           return (
-            <div key={date} style={{ background: '#fff', border: '1px solid #E4E7E2', borderRadius: '10px', overflow: 'hidden' }}>
-              <div style={{ padding: '10px 16px', background: '#F0F3EF', borderBottom: '1px solid #E4E7E2' }}>
-                <span style={{ fontSize: '13px', fontWeight: 600, color: '#344C3D' }}>{formatDate(date + 'T00:00:00Z')}</span>
+            <div key={date} style={{ background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(16px)', border: '1px solid rgba(115,138,110,0.15)', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 8px 32px rgba(52,76,61,0.04)' }}>
+              <div style={{ padding: '16px 24px', background: 'rgba(115,138,110,0.05)', borderBottom: '1px solid rgba(115,138,110,0.15)' }}>
+                <span style={{ fontSize: '15px', fontWeight: 700, color: '#344C3D' }}>{formatDate(date + 'T00:00:00Z')}</span>
               </div>
-              <div style={{ padding: '12px 16px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+              <div style={{ padding: '24px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
                 {SLOT_ORDER.map(slotLabel => {
                   const slot = dateSlots.find(s => s.slotLabel === slotLabel);
                   if (!slot) {
                     return (
-                      <div key={slotLabel} style={{ padding: '12px', borderRadius: '8px', border: '1px dashed #E4E7E2', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '80px' }}>
-                        <span style={{ fontSize: '12px', color: '#BFCFBB' }}>{slotLabel}</span>
+                      <div key={slotLabel} style={{ padding: '20px', borderRadius: '16px', border: '1px dashed rgba(115,138,110,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '110px', background: 'rgba(255,255,255,0.3)' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: '#BFCFBB' }}>{slotLabel} Available</span>
                       </div>
                     );
                   }
@@ -94,16 +96,19 @@ export function ReturnSlots() {
                   const isFull = pct >= 1;
                   const isNearFull = pct >= 0.8;
                   return (
-                    <div key={slot.id} style={{ padding: '12px', borderRadius: '8px', border: `1px solid ${isFull ? 'rgba(201,123,61,0.3)' : '#E4E7E2'}`, background: '#FAFAF8' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                        <span style={{ fontSize: '12px', fontWeight: 600, color: '#344C3D' }}>{slotLabel}</span>
-                        <button onClick={() => handleDelete(slot.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#BFCFBB', padding: 0 }}><X size={12} /></button>
+                    <div key={slot.id} style={{ padding: '20px', borderRadius: '16px', border: `1px solid ${isFull ? 'rgba(201,123,61,0.3)' : 'rgba(115,138,110,0.2)'}`, background: isFull ? 'rgba(201,123,61,0.03)' : '#fff', position: 'relative', overflow: 'hidden', boxShadow: '0 4px 12px rgba(52,76,61,0.02)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                        <span style={{ fontSize: '14px', fontWeight: 700, color: '#344C3D', letterSpacing: '0.02em' }}>{slotLabel}</span>
+                        <button onClick={() => handleDelete(slot.id)} style={{ background: 'rgba(0,0,0,0.03)', borderRadius: '50%', border: 'none', cursor: 'pointer', color: '#8EA58C', padding: '4px', display: 'flex' }}><X size={14} /></button>
                       </div>
-                      <div style={{ fontSize: '11px', color: isNearFull ? '#C97B3D' : '#8EA58C', marginBottom: '6px' }}>
-                        {slot.bookedCount}/{slot.capacity} booked
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '8px' }}>
+                        <div style={{ fontSize: '24px', fontWeight: 800, color: isNearFull ? '#C97B3D' : '#344C3D', lineHeight: 1 }}>
+                          {slot.bookedCount} <span style={{ fontSize: '13px', fontWeight: 600, color: '#8EA58C' }}>/ {slot.capacity}</span>
+                        </div>
+                        <span style={{ fontSize: '11px', fontWeight: 600, color: isNearFull ? '#C97B3D' : '#738A6E', textTransform: 'uppercase' }}>Booked</span>
                       </div>
-                      <div style={{ height: '4px', background: '#E4E7E2', borderRadius: '2px', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${Math.min(pct * 100, 100)}%`, background: isFull ? '#C97B3D' : isNearFull ? '#C97B3D' : '#738A6E', borderRadius: '2px' }} />
+                      <div style={{ height: '6px', background: 'rgba(115,138,110,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${Math.min(pct * 100, 100)}%`, background: isFull ? '#C97B3D' : isNearFull ? '#C97B3D' : 'linear-gradient(90deg, #738A6E, #4a6848)', borderRadius: '3px' }} />
                       </div>
                     </div>
                   );
@@ -112,6 +117,18 @@ export function ReturnSlots() {
             </div>
           );
         })}
+
+        {dates.length > 2 && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: '8px' }}>
+            <button onClick={() => setShowAll(!showAll)} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(115,138,110,0.1)', border: 'none', padding: '8px 16px', borderRadius: '100px', cursor: 'pointer', color: '#344C3D', fontSize: '13px', fontWeight: 600, transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(115,138,110,0.15)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(115,138,110,0.1)'}>
+              {showAll ? (
+                <>Show Less <ChevronUp size={16} /></>
+              ) : (
+                <>View All ({dates.length - 2} more) <ChevronDown size={16} /></>
+              )}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

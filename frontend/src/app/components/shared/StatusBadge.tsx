@@ -31,11 +31,8 @@ export function StatusBadge({ status, size = 'md' }: StatusBadgeProps) {
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        padding,
         fontSize,
-        fontWeight: 500,
-        borderRadius: '999px',
-        background: config.bg,
+        fontWeight: 600,
         color: config.text,
         whiteSpace: 'nowrap',
         letterSpacing: '0.01em',

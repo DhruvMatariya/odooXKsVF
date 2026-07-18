@@ -133,9 +133,9 @@ export function LandingPage() {
 
         {/* ── HERO ──────────────────────────────────────────── */}
         <section style={{ paddingTop: '80px', paddingBottom: '60px', textAlign: 'center' }}>
-          <h1 style={{ fontSize: '68px', fontWeight: 800, color: t.text, letterSpacing: '-0.04em', lineHeight: 1.07, maxWidth: '820px', margin: '0px auto 0px' }}>
+          <h1 style={{ fontSize: '68px', fontWeight: 800, color: t.text, letterSpacing: '-0.04em', lineHeight: 1.07, maxWidth: '820px',marginTop:'30px', margin: '0px auto 0px' }}>
             Rent anything.<br />
-            <span style={{ color: t.accent }}>Manage everything.</span>
+            <span style={{ color: t.accent }}><Typewriter text="Manage everything." /></span>
           </h1>
           <p style={{ fontSize: '18px', color: t.textMuted, maxWidth: '580px', margin: '16px auto 32px', lineHeight: 1.65 }}>
             The complete rental operating system. From high-end cameras to heavy machinery handle listings, deposits, and returns with absolute confidence.
@@ -175,7 +175,7 @@ export function LandingPage() {
             <p style={{ fontSize: '16px', color: t.textMuted, maxWidth: '500px', margin: '0 auto' }}>Everything you need to run a modern, end-to-end rental business.</p>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
-            <FeatureCard icon={<ShieldCheck size={22} />} title="Automated Deposits" desc="Hold deposits securely via Stripe. Automatically deduct late fees or damages based on your custom rules." t={t} />
+            <FeatureCard icon={<ShieldCheck size={22} />} title="Automated Deposits" desc="Hold deposits securely via RazorPay. Automatically deduct late fees or damages based on your custom rules." t={t} />
             <FeatureCard icon={<PackageOpen size={22} />} title="Live Inventory Sync" desc="Real-time syncing. When an item is booked, inventory instantly locks to prevent double-booking." t={t} />
             <FeatureCard icon={<BarChart3 size={22} />} title="Vendor Analytics" desc="Track revenue, monitor active rentals, and manage your equipment pipeline from a single dashboard." t={t} />
             <FeatureCard icon={<TrendingUp size={22} />} title="Order Lifecycle" desc="Full order lifecycle from PENDING_PAYMENT to COMPLETED with automated state transitions and audit logs." t={t} />
@@ -193,12 +193,15 @@ export function LandingPage() {
                 The rental platform<br />built by operators.
               </h2>
               <p style={{ fontSize: '16px', color: t.textMuted, lineHeight: 1.7, marginBottom: '24px' }}>
-                Rentsure was built to solve a real problem — managing rentals, deposits, and returns across dozens of products is chaotic without the right tools. We've built the infrastructure to make it simple, transparent, and scalable.
+               Managing rentals, deposits, and returns across dozens of products is chaotic without the right tools. Rentsure is the infrastructure that makes it simple, transparent, and scalable.
               </p>
-              <p style={{ fontSize: '16px', color: t.textMuted, lineHeight: 1.7, marginBottom: '32px' }}>
-                Our platform connects customers and vendors with an end-to-end order lifecycle, automated deposit handling via Stripe, and real-time inventory tracking — all built on a strict, auditable contract.
+              <p style={{ fontSize: '16px', color: t.textMuted, lineHeight: 1.7, marginBottom: '24px' }}>
+               One end-to-end order lifecycle connects customers and vendors — deposits are held and refunded automatically via Stripe, and late fees are calculated the instant an item is returned.
               </p>
-              {['Full order audit trail via order events', 'Stripe-powered deposit hold & refund', 'BullMQ background jobs for reminders', 'Socket.IO for real-time dashboard updates'].map(item => (
+
+
+
+              {['Full order audit trail via order events', 'RazorPay    -powered deposit hold & refund', 'BullMQ background jobs for reminders', 'Socket.IO for real-time dashboard updates'].map(item => (
                 <div key={item} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
                   <CheckCircle size={16} color={t.accent} />
                   <span style={{ fontSize: '14px', color: t.textMuted }}>{item}</span>
@@ -505,4 +508,36 @@ function CountUp({ end, suffix = '', duration = 2000 }: { end: number, suffix?: 
   }, [end, duration, hasAnimated]);
 
   return <span ref={ref}>{count}{suffix}</span>;
+}
+
+function Typewriter({ text }: { text: string }) {
+  const [displayed, setDisplayed] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    
+    if (isDeleting) {
+      if (displayed === '') {
+        timer = setTimeout(() => setIsDeleting(false), 500);
+      } else {
+        timer = setTimeout(() => setDisplayed(displayed.slice(0, -1)), 50);
+      }
+    } else {
+      if (displayed === text) {
+        timer = setTimeout(() => setIsDeleting(true), 2500);
+      } else {
+        timer = setTimeout(() => setDisplayed(text.slice(0, displayed.length + 1)), 120);
+      }
+    }
+    
+    return () => clearTimeout(timer);
+  }, [displayed, isDeleting, text]);
+
+  return (
+    <span>
+      {displayed}
+      <span className="animate-pulse" style={{ fontWeight: 300, marginLeft: '2px', color: 'currentColor' }}>|</span>
+    </span>
+  );
 }

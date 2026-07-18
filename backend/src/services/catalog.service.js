@@ -2,6 +2,15 @@ import pool from '../config/db.js';
 import ApiError from '../utils/ApiError.js';
 import { HTTP_STATUS } from '../config/constant.js';
 import { MESSAGES } from '../config/messages.js';
+import fs from 'fs';
+import path from 'path';
+
+const deleteFile = (filePath) => {
+    const fullPath = path.join(process.cwd(), filePath);
+    if (fs.existsSync(fullPath)) {
+        fs.unlinkSync(fullPath);
+    }
+};
 
 export const catalogService = {
   async createCategory({ name, description }) {
@@ -61,11 +70,11 @@ export const catalogService = {
       }
 
       const productResult = await client.query(
-        `INSERT INTO products (vendor_user_id, category_id, name, description, brand, manufacturer, thumbnail, images)
+        `INSERT INTO products (vendor_user_id, category_id, name, description, brand, manufacturer, thumbnail_url, images)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         RETURNING id, vendor_user_id, category_id, name, description, brand, manufacturer, thumbnail, images, status, created_at, updated_at`,
+         RETURNING id, vendor_user_id, category_id, name, description, brand, manufacturer, thumbnail_url, images, status, created_at, updated_at`,
         [vendorUserId, data.categoryId, data.name.trim(), data.description?.trim() || null, 
-         data.brand?.trim() || null, data.manufacturer?.trim() || null, data.thumbnail || null, JSON.stringify(data.images || [])]
+         data.brand?.trim() || null, data.manufacturer?.trim() || null, data.thumbnailUrl || null, JSON.stringify(data.images || [])]
       );
       const product = productResult.rows[0];
 
@@ -80,6 +89,109 @@ export const catalogService = {
       return { ...product, category: catResult.rows[0] };
     } catch (err) {
       await client.query('ROLLBACK');
+      if (data.thumbnailUrl) deleteFile(data.thumbnailUrl);
+      if (data.images?.length) data.images.forEach(deleteFile);
+      throw err;
+    } finally {
+      client.release();
+    }
+  },
+
+  async createProductWithFiles(vendorUserId, data, thumbnailFile, galleryFiles) {
+    const thumbnailUrl = thumbnailFile ? `/uploads/products/${thumbnailFile.filename}` : null;
+    const galleryUrls = galleryFiles?.map(f => `/uploads/products/${f.filename}`) || [];
+    
+    return this.createProduct(vendorUserId, {
+      ...data,
+      thumbnailUrl,
+      images: galleryUrls,
+    });
+  },
+
+  async updateProductWithFiles(vendorUserId, productId, data, thumbnailFile, galleryFiles) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const existing = await client.query(
+        'SELECT id, category_id, thumbnail_url, images FROM products WHERE id = $1 AND vendor_user_id = $2 AND is_deleted = false',
+        [productId, vendorUserId]
+      );
+      if (existing.rows.length === 0) {
+        throw new ApiError(HTTP_STATUS.FORBIDDEN, MESSAGES.CATALOG.FORBIDDEN_NOT_OWNER, 'FORBIDDEN_NOT_OWNER');
+      }
+      const currentProduct = existing.rows[0];
+
+      if (data.categoryId && data.categoryId !== currentProduct.category_id) {
+        const cat = await client.query('SELECT id FROM categories WHERE id = $1 AND is_deleted = false', [data.categoryId]);
+        if (cat.rows.length === 0) {
+          throw new ApiError(HTTP_STATUS.NOT_FOUND, MESSAGES.CATALOG.CATEGORY_NOT_FOUND, 'CATEGORY_NOT_FOUND');
+        }
+      }
+
+      if (data.name) {
+        const dup = await client.query(
+          `SELECT id FROM products 
+           WHERE vendor_user_id = $1 AND category_id = $2 AND LOWER(TRIM(name)) = LOWER(TRIM($3)) AND id != $4 AND is_deleted = false`,
+          [vendorUserId, data.categoryId || currentProduct.category_id, data.name, productId]
+        );
+        if (dup.rows.length > 0) {
+          throw new ApiError(HTTP_STATUS.CONFLICT, MESSAGES.CATALOG.PRODUCT_ALREADY_EXISTS, 'PRODUCT_ALREADY_EXISTS');
+        }
+      }
+
+      const thumbnailUrl = thumbnailFile ? `/uploads/products/${thumbnailFile.filename}` : (data.thumbnailUrl !== undefined ? data.thumbnailUrl : currentProduct.thumbnail_url);
+      const images = galleryFiles?.length > 0 
+        ? galleryFiles.map(f => `/uploads/products/${f.filename}`)
+        : (data.images !== undefined ? data.images : (currentProduct.images || []));
+
+      const updates = [];
+      const values = [productId];
+      let idx = 2;
+      const fields = ['categoryId', 'name', 'description', 'brand', 'manufacturer', 'status'];
+      for (const field of fields) {
+        if (data[field] !== undefined) {
+          const col = field === 'categoryId' ? 'category_id' : field;
+          updates.push(`${col} = $${idx}`);
+          values.push(data[field]);
+          idx++;
+        }
+      }
+      if (thumbnailUrl !== currentProduct.thumbnail_url) {
+        updates.push(`thumbnail_url = $${idx}`);
+        values.push(thumbnailUrl);
+        idx++;
+      }
+      if (JSON.stringify(images) !== JSON.stringify(currentProduct.images || [])) {
+        updates.push(`images = $${idx}`);
+        values.push(JSON.stringify(images));
+        idx++;
+      }
+      if (updates.length === 0 && !thumbnailFile && (!galleryFiles || galleryFiles.length === 0)) {
+        throw new ApiError(HTTP_STATUS.BAD_REQUEST, 'No fields to update');
+      }
+      updates.push('updated_at = NOW()');
+
+      const result = await client.query(
+        `UPDATE products SET ${updates.join(', ')} WHERE id = $1 RETURNING id, name, category_id, brand, manufacturer, status, thumbnail_url, images, created_at`,
+        values
+      );
+
+      await client.query('COMMIT');
+
+      if (thumbnailFile && currentProduct.thumbnail_url) {
+        deleteFile(currentProduct.thumbnail_url);
+      }
+      if (galleryFiles?.length > 0 && currentProduct.images?.length) {
+        currentProduct.images.forEach(deleteFile);
+      }
+
+      const catResult = await pool.query('SELECT id, name FROM categories WHERE id = $1', [result.rows[0].category_id]);
+      return { ...result.rows[0], category: catResult.rows[0] };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      if (thumbnailFile) deleteFile(`/uploads/products/${thumbnailFile.filename}`);
+      if (galleryFiles?.length) galleryFiles.forEach(f => deleteFile(`/uploads/products/${f.filename}`));
       throw err;
     } finally {
       client.release();

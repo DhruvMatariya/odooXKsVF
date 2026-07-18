@@ -1,6 +1,7 @@
 import express from 'express';
 import { authenticateUser, authorizeRoles } from '../middleware/auth.middleware.js';
 import { validate } from '../validations/validate.js';
+import { uploadProductImages } from '../middleware/upload.middleware.js';
 import {
   categorySchema,
   createProductSchema,
@@ -30,8 +31,8 @@ router.get('/products/:id/pricing', validate(productIdParamSchema), catalogContr
 // Vendor only
 router.post('/categories', authenticateUser, authorizeRoles('admin', 'vendor'), validate(categorySchema), catalogController.createCategory);
 
-router.post('/products', authenticateUser, authorizeRoles('vendor'), validate(createProductSchema), catalogController.createProduct);
-router.patch('/products/:id', authenticateUser, authorizeRoles('vendor'), validate(updateProductSchema), catalogController.updateProduct);
+router.post('/products', authenticateUser, authorizeRoles('vendor'), uploadProductImages, validate(createProductSchema), catalogController.createProduct);
+router.patch('/products/:id', authenticateUser, authorizeRoles('vendor'), uploadProductImages, validate(updateProductSchema), catalogController.updateProduct);
 router.delete('/products/:id', authenticateUser, authorizeRoles('vendor'), validate(productIdParamSchema), catalogController.deleteProduct);
 
 router.patch('/products/:id/inventory', authenticateUser, authorizeRoles('vendor'), validate(updateInventorySchema), catalogController.updateInventory);

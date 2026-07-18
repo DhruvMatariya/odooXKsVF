@@ -3,6 +3,18 @@ import ApiError from '../utils/ApiError.js';
 import { HTTP_STATUS } from '../config/constant.js';
 import { MESSAGES } from '../config/messages.js';
 
+const formatProductResponse = (product) => ({
+  id: product.id,
+  name: product.name,
+  category: product.category,
+  brand: product.brand,
+  manufacturer: product.manufacturer,
+  status: product.status,
+  thumbnail: product.thumbnail_url ? { url: product.thumbnail_url } : null,
+  images: (product.images || []).map((url, index) => ({ id: url, url, displayOrder: index })),
+  createdAt: product.created_at,
+});
+
 export const catalogController = {
   // POST /api/v1/categories (admin - seed only)
   async createCategory(req, res) {
@@ -26,20 +38,15 @@ export const catalogController = {
   // POST /api/v1/products (vendor)
   async createProduct(req, res) {
     const vendorUserId = req.user.id;
-    const product = await catalogService.createProduct(vendorUserId, req.validated.body);
+    const files = req.files || {};
+    const thumbnailFile = files.thumbnail?.[0];
+    const galleryFiles = files.images || [];
+
+    const product = await catalogService.createProductWithFiles(vendorUserId, req.validated.body, thumbnailFile, galleryFiles);
     res.status(HTTP_STATUS.CREATED).json({
       success: true,
       message: MESSAGES.CATALOG.PRODUCT_CREATED,
-      data: {
-        id: product.id,
-        name: product.name,
-        category: product.category,
-        brand: product.brand,
-        manufacturer: product.manufacturer,
-        status: product.status,
-        thumbnail: product.thumbnail,
-        createdAt: product.created_at,
-      },
+      data: formatProductResponse(product),
     });
   },
 
@@ -69,20 +76,15 @@ export const catalogController = {
   // PATCH /api/v1/products/:id (vendor, owner)
   async updateProduct(req, res) {
     const vendorUserId = req.user.id;
-    const product = await catalogService.updateProduct(vendorUserId, req.validated.params.id, req.validated.body);
+    const files = req.files || {};
+    const thumbnailFile = files.thumbnail?.[0];
+    const galleryFiles = files.images || [];
+
+    const product = await catalogService.updateProductWithFiles(vendorUserId, req.validated.params.id, req.validated.body, thumbnailFile, galleryFiles);
     res.status(HTTP_STATUS.OK).json({
       success: true,
       message: MESSAGES.CATALOG.PRODUCT_UPDATED,
-      data: {
-        id: product.id,
-        name: product.name,
-        category: product.category,
-        brand: product.brand,
-        manufacturer: product.manufacturer,
-        status: product.status,
-        thumbnail: product.thumbnail,
-        createdAt: product.created_at,
-      },
+      data: formatProductResponse(product),
     });
   },
 

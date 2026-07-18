@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router';
-import { formatPrice } from '../../lib/utils';
+import { formatPrice, getPricingStartingPrice } from '../../lib/utils';
 import { Pagination } from '../../components/shared/Pagination';
-import { Search } from 'lucide-react';
+import { Search, SlidersHorizontal, ArrowUpDown, LayoutGrid, List } from 'lucide-react';
 import { listProducts, getCategories } from '../../lib/api';
 import { toast } from 'sonner';
 
@@ -19,6 +19,19 @@ export function ProductListing() {
   const [products, setProducts] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [transitionKey, setTransitionKey] = useState(0);
+
+  const pageSize = viewMode === 'grid' ? GRID_PAGE_SIZE : LIST_PAGE_SIZE;
+
+  function switchView(mode: 'grid' | 'list') {
+    if (mode === viewMode) return;
+    setViewMode(mode);
+    setPage(1);
+    setTransitionKey(k => k + 1);
+  }
+
+  const paged = products;
 
   useEffect(() => {
     loadCategories();
@@ -42,7 +55,7 @@ export function ProductListing() {
     try {
       const res = await listProducts({
         page,
-        limit: PAGE_SIZE,
+        limit: pageSize,
         search,
         category: categoryId,
         sort,
@@ -59,7 +72,7 @@ export function ProductListing() {
     }
   }
 
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const totalPages = Math.ceil(total / pageSize);
 
   return (
     <div>
@@ -73,21 +86,7 @@ export function ProductListing() {
           to   { opacity: 1; transform: translateX(0); }
         }
       `}</style>
-      {/* Hero Header */}
-      {/* <div style={{ textAlign: 'center', padding: '40px 0 32px' }}>
-        <p style={{ fontSize: '12px', fontWeight: 700, color: '#738A6E', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '10px' }}>
-          {filtered.length} products available
-        </p>
-        <h1 style={{ fontSize: '40px', fontWeight: 800, color: '#344C3D', letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: '10px' }}>
-          Rent anything,{' '}
-          <span style={{ color: '#8EA58C' }}>on your terms.</span>
-        </h1>
-        <p style={{ fontSize: '15px', color: '#8EA58C', maxWidth: '400px', margin: '0 auto', lineHeight: 1.6 }}>
-          High-quality gear from verified vendors — cameras, tools, tents, and more.
-        </p>
-      </div> */}
       <br></br>
-      {/* Filter bar */}
       <div style={{
         background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(16px)',
         border: '1px solid rgba(115,138,110,0.2)', borderRadius: '18px',
@@ -95,7 +94,6 @@ export function ProductListing() {
         display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center',
         boxShadow: '0 4px 20px rgba(52,76,61,0.05)',
       }}>
-        {/* Search */}
         <div style={{ position: 'relative', flex: '1 1 200px' }}>
           <Search size={14} color="#8EA58C" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
           <input
@@ -127,7 +125,6 @@ export function ProductListing() {
           {order === 'asc' ? 'Asc' : 'Desc'}
         </button>
 
-        {/* View toggle */}
         <div style={{ display: 'flex', gap: '4px', background: 'rgba(115,138,110,0.08)', padding: '4px', borderRadius: '10px' }}>
           <button
             onClick={() => switchView('grid')}
@@ -158,11 +155,11 @@ export function ProductListing() {
         </div>
       </div>
 
-      {/* Product display */}
-      {paged.length === 0 ? (
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '60px', color: '#8EA58C', fontSize: '14px' }}>Loading products…</div>
+      ) : paged.length === 0 ? (
         <EmptyState message="No products match your filters." />
       ) : viewMode === 'grid' ? (
-        /* ── GRID VIEW ── */
         <div key={transitionKey} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', gridAutoRows: '1fr', marginBottom: '8px' }}>
           {paged.map((product, idx) => {
             const startingPrice = getPricingStartingPrice(product.pricing);
@@ -236,7 +233,6 @@ export function ProductListing() {
           })}
         </div>
       ) : (
-        /* ── LIST VIEW ── */
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '8px' }}>
           {paged.map(product => {
             const startingPrice = getPricingStartingPrice(product.pricing);
@@ -266,7 +262,6 @@ export function ProductListing() {
                     el.style.background = 'rgba(255,255,255,0.9)';
                   }}
                 >
-                  {/* Thumbnail */}
                   <div style={{ position: 'relative', width: '110px', height: '90px', flexShrink: 0, overflow: 'hidden', background: '#F0F3EF' }}>
                     <img src={product.thumbnail} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.4s ease' }}
                       onMouseEnter={e => (e.currentTarget as HTMLImageElement).style.transform = 'scale(1.1)'}
@@ -279,7 +274,6 @@ export function ProductListing() {
                     )}
                   </div>
 
-                  {/* Info */}
                   <div style={{ flex: 1, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '16px' }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
@@ -311,7 +305,7 @@ export function ProductListing() {
       )}
 
       <Pagination
-        meta={{ page, limit: pageSize, total: filtered.length, totalPages }}
+        meta={{ page, limit: pageSize, total, totalPages }}
         onPageChange={p => setPage(p)}
       />
     </div>

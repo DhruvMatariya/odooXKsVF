@@ -245,3 +245,8 @@
 {"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:55:07"}
 {"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:55:07"}
 {"level":"info","message":"Login successful","service":"auth-service","timestamp":"2026-07-18 15:58:11","userId":"463a8888-ea98-4596-8861-a7578105817d"}
+{"error":"","level":"error","message":"Error connecting to the database:","service":"auth-service","timestamp":"2026-07-18 16:38:08"}
+{"error":"","level":"error","message":"Error connecting to the database:","service":"auth-service","timestamp":"2026-07-18 16:38:25"}
+{"level":"info","message":"Auth service is running on port 3000","service":"auth-service","timestamp":"2026-07-18 16:39:01"}
+{"level":"info","message":"http://localhost:3000","service":"auth-service","timestamp":"2026-07-18 16:39:01"}
+{"error":"","level":"error","message":"Error connecting to the database:","service":"auth-service","timestamp":"2026-07-18 16:40:10"}

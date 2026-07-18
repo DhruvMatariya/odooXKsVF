@@ -1666,4 +1666,95 @@ export const orderService = {
       client.release();
     }
   },
+
+  async getVendorDashboardStats(vendorUserId) {
+    const client = await pool.connect();
+    try {
+      // Revenue (sum of rental fees from completed orders)
+      const revenueResult = await client.query(
+        `SELECT COALESCE(SUM(p.amount), 0) as revenue
+         FROM payments p
+         JOIN orders o ON p.order_id = o.id
+         WHERE o.vendor_user_id = $1 AND p.type = 'RENTAL_FEE' AND p.status = 'succeeded'`,
+        [vendorUserId]
+      );
+
+      // Active rentals (HANDED_OVER, ACTIVE_RENTAL)
+      const activeRentalsResult = await client.query(
+        `SELECT COUNT(*) as count FROM orders 
+         WHERE vendor_user_id = $1 AND status IN ('HANDED_OVER', 'ACTIVE_RENTAL')`,
+        [vendorUserId]
+      );
+
+      // Due today (rental period ends today)
+      const dueTodayResult = await client.query(
+        `SELECT COUNT(*) as count FROM orders 
+         WHERE vendor_user_id = $1 AND status IN ('HANDED_OVER', 'ACTIVE_RENTAL') 
+         AND DATE(rental_period_end) = CURRENT_DATE`,
+        [vendorUserId]
+      );
+
+      // Overdue (rental period ended, not returned)
+      const overdueResult = await client.query(
+        `SELECT COUNT(*) as count FROM orders 
+         WHERE vendor_user_id = $1 AND status IN ('HANDED_OVER', 'ACTIVE_RENTAL') 
+         AND rental_period_end < NOW()`,
+        [vendorUserId]
+      );
+
+      // Upcoming pickups (confirmed, delivery type PICKUP, rental hasn't started)
+      const upcomingPickupsResult = await client.query(
+        `SELECT COUNT(*) as count FROM orders 
+         WHERE vendor_user_id = $1 AND status = 'CONFIRMED' 
+         AND delivery_type = 'PICKUP' AND rental_period_start > NOW()`,
+        [vendorUserId]
+      );
+
+      // New requests (pending payment or confirmed but not handed over)
+      const newRequestsResult = await client.query(
+        `SELECT COUNT(*) as count FROM orders 
+         WHERE vendor_user_id = $1 AND status IN ('PENDING_PAYMENT', 'CONFIRMED')`,
+        [vendorUserId]
+      );
+
+      // Revenue chart data (last 7 days)
+      const revenueChartResult = await client.query(
+        `SELECT DATE(p.created_at) as date, COALESCE(SUM(p.amount), 0) as revenue
+         FROM payments p
+         JOIN orders o ON p.order_id = o.id
+         WHERE o.vendor_user_id = $1 AND p.type = 'RENTAL_FEE' AND p.status = 'succeeded'
+         AND p.created_at >= NOW() - INTERVAL '7 days'
+         GROUP BY DATE(p.created_at)
+         ORDER BY date ASC`,
+        [vendorUserId]
+      );
+
+      // Order status distribution
+      const statusDistResult = await client.query(
+        `SELECT status, COUNT(*) as count FROM orders 
+         WHERE vendor_user_id = $1
+         GROUP BY status`,
+        [vendorUserId]
+      );
+
+      return {
+        revenue: parseInt(revenueResult.rows[0].revenue) || 0,
+        activeRentals: parseInt(activeRentalsResult.rows[0].count) || 0,
+        dueToday: parseInt(dueTodayResult.rows[0].count) || 0,
+        overdue: parseInt(overdueResult.rows[0].count) || 0,
+        upcomingPickups: parseInt(upcomingPickupsResult.rows[0].count) || 0,
+        newRequests: parseInt(newRequestsResult.rows[0].count) || 0,
+        revenueChart: revenueChartResult.rows.map(r => ({
+          name: new Date(r.date).toLocaleDateString('en-US', { weekday: 'short' }),
+          revenue: parseInt(r.revenue) || 0,
+        })),
+        statusDistribution: statusDistResult.rows.map(r => ({
+          name: r.status,
+          count: parseInt(r.count) || 0,
+        })),
+      };
+    } finally {
+      client.release();
+    }
+  },
 };

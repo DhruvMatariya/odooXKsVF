@@ -1,30 +1,61 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { ORDERS } from '../../lib/mockData';
 import { formatPrice } from '../../lib/utils';
 import { ArrowLeft, Upload } from 'lucide-react';
 import { toast } from 'sonner';
+import { inspectOrder, getOrderById } from '../../lib/api';
 
 export function InspectionForm() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const order = ORDERS.find(o => o.id === id);
+  const [order, setOrder] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
   const [form, setForm] = useState({
     damageFound: false,
     conditionNotes: '',
     damageDeductionAmount: 0,
   });
-  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (id) {
+      loadOrder(id);
+    }
+  }, [id]);
+
+  async function loadOrder(orderId: string) {
+    setLoading(true);
+    try {
+      const res = await getOrderById(orderId);
+      if (res.data) {
+        setOrder(res.data);
+      }
+    } catch (e) {
+      toast.error('Failed to load order');
+      navigate('/vendor/orders');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div style={{ maxWidth: '600px', margin: '0 auto', padding: '32px', textAlign: 'center', color: '#8EA58C' }}>
+        <div style={{ fontSize: '14px', fontWeight: 500 }}>Loading inspection…</div>
+      </div>
+    );
+  }
 
   if (!order) {
     return <div style={{ color: '#8EA58C', padding: '32px' }}>Order not found</div>;
   }
 
-  const depositHeld = order.deposit.amountHeld;
-  const lateFeeRule = order.product.lateFeeRule;
-  // Mock: calculate late by 90 minutes
-  const lateByMinutes = 90;
+  const depositHeld = order.deposit?.amountHeld || 0;
+  const lateFeeRule = order.product?.lateFeeRule || { gracePeriodHours: 0, rateType: 'HOURLY', rateAmount: 0, maxCap: 0 };
+  const actualReturnTime = order.actualReturnTime ? new Date(order.actualReturnTime) : new Date();
+  const rentalPeriodEnd = order.rentalPeriodEnd ? new Date(order.rentalPeriodEnd) : new Date();
+  const lateByMinutes = Math.max(0, Math.round((actualReturnTime.getTime() - rentalPeriodEnd.getTime()) / 60000));
   const lateByUnits = lateFeeRule.rateType === 'HOURLY' ? lateByMinutes / 60 : lateByMinutes / (60 * 24);
   const lateFee = Math.min(Math.ceil(lateByUnits) * lateFeeRule.rateAmount, lateFeeRule.maxCap);
   const damageDeduction = form.damageFound ? form.damageDeductionAmount : 0;
@@ -32,11 +63,23 @@ export function InspectionForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
-    await new Promise(r => setTimeout(r, 700));
-    toast.success('Inspection submitted — deposit settled');
-    navigate('/vendor/orders');
-    setLoading(false);
+    setSubmitting(true);
+    try {
+      const res = await inspectOrder(id!, {
+        damageFound: form.damageFound,
+        conditionNotes: form.conditionNotes,
+        photos: [],
+        damageDeductionAmount: form.damageDeductionAmount,
+      });
+      if (res.data) {
+        toast.success('Inspection submitted — deposit settled');
+        navigate('/vendor/orders');
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to submit inspection');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -46,7 +89,7 @@ export function InspectionForm() {
       </button>
 
       <h1 style={{ color: '#344C3D', fontWeight: 700, fontSize: '20px', letterSpacing: '-0.02em', marginBottom: '4px' }}>Return Inspection</h1>
-      <p style={{ color: '#738A6E', fontSize: '14px', marginBottom: '24px' }}>{order.product.name} · Order #{order.id}</p>
+      <p style={{ color: '#738A6E', fontSize: '14px', marginBottom: '24px' }}>{order.product?.name} · Order #{order.id}</p>
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {/* Damage section */}
@@ -122,8 +165,8 @@ export function InspectionForm() {
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <button type="submit" disabled={loading} style={{ padding: '10px 28px', borderRadius: '8px', border: 'none', background: loading ? '#A9C2A4' : '#738A6E', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer' }}>
-            {loading ? 'Submitting…' : 'Submit Inspection & Settle Deposit'}
+          <button type="submit" disabled={submitting} style={{ padding: '10px 28px', borderRadius: '8px', border: 'none', background: submitting ? '#A9C2A4' : '#738A6E', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer' }}>
+            {submitting ? 'Submitting…' : 'Submit Inspection & Settle Deposit'}
           </button>
         </div>
       </form>

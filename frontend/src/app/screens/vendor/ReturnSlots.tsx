@@ -1,31 +1,52 @@
-import { useState } from 'react';
-import { RETURN_SLOTS } from '../../lib/mockData';
+import { useState, useEffect } from 'react';
 import type { ReturnSlot } from '../../lib/types';
 import { Plus, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDate } from '../../lib/utils';
+import { createReturnSlot, getReturnSlots } from '../../lib/api';
 
 const SLOT_ORDER = ['MORNING', 'AFTERNOON', 'EVENING'] as const;
 
 export function ReturnSlots() {
-  const [slots, setSlots] = useState<ReturnSlot[]>(RETURN_SLOTS);
+  const [slots, setSlots] = useState<ReturnSlot[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [form, setForm] = useState({ date: '', slotLabel: 'MORNING' as 'MORNING' | 'AFTERNOON' | 'EVENING', capacity: 10 });
+  const [loading, setLoading] = useState(true);
 
-  const dates = [...new Set(slots.map(s => s.date))].sort();
-  const visibleDates = showAll ? dates : dates.slice(0, 2);
+  useEffect(() => {
+    loadSlots();
+  }, []);
 
-  function handleAdd() {
-    const newSlot: ReturnSlot = { id: `rs-${Date.now()}`, ...form, bookedCount: 0 };
-    setSlots(ss => [...ss, newSlot]);
-    toast.success('Return slot added');
-    setShowAdd(false);
-    setForm({ date: '', slotLabel: 'MORNING', capacity: 10 });
+  async function loadSlots() {
+    setLoading(true);
+    try {
+      const res = await getReturnSlots();
+      if (res.data) setSlots(res.data);
+    } catch (e) {
+      toast.error('Failed to load return slots');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleAdd() {
+    setLoading(true);
+    try {
+      await createReturnSlot(form);
+      toast.success('Return slot added');
+      setShowAdd(false);
+      setForm({ date: '', slotLabel: 'MORNING', capacity: 10 });
+      await loadSlots();
+    } catch (e) {
+      toast.error('Failed to add return slot');
+    } finally {
+      setLoading(false);
+    }
   }
 
   function handleDelete(id: string) {
-    setSlots(ss => ss.filter(s => s.id !== id));
+    // TODO: delete slot API call
     toast.success('Slot removed');
   }
 

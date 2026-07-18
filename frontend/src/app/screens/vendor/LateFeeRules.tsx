@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { formatPrice } from '../../lib/utils';
+import { upsertLateFeeRule } from '../../lib/api';
 
 export function LateFeeRules() {
   const [form, setForm] = useState({
@@ -10,13 +11,24 @@ export function LateFeeRules() {
     maxCap: 150000,
   });
   const [loading, setLoading] = useState(false);
+  const [initialLoad, setInitialLoad] = useState(true);
+
+  useEffect(() => {
+    // TODO: fetch existing rule (get endpoint)
+    setInitialLoad(false);
+  }, []);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    await new Promise(r => setTimeout(r, 500));
-    toast.success('Late fee rule updated');
-    setLoading(false);
+    try {
+      await upsertLateFeeRule(form);
+      toast.success('Late fee rule updated');
+    } catch (e) {
+      toast.error('Failed to update late fee rule');
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

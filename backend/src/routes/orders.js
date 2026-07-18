@@ -71,4 +71,7 @@ router.post('/orders/:id/mark-paid-offline', authenticateUser, authorizeRoles('v
   res.status(501).json({ success: false, error: { code: 'NOT_IMPLEMENTED', message: 'Mark paid offline not implemented yet' } });
 });
 
+// Vendor dashboard stats
+router.get('/vendor/dashboard-stats', authenticateUser, authorizeRoles('vendor'), orderController.getDashboardStats);
+
 export default router;

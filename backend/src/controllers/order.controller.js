@@ -328,4 +328,13 @@ export const orderController = {
       data: toOrderResponseDTO(order),
     });
   },
+
+  async getDashboardStats(req, res) {
+    const vendorUserId = req.user.id;
+    const stats = await orderService.getVendorDashboardStats(vendorUserId);
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      data: stats,
+    });
+  },
 };

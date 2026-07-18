@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import { upsertCancellationPolicy } from '../../lib/api';
 
 export function CancellationPolicy() {
   const [form, setForm] = useState({
@@ -8,13 +9,24 @@ export function CancellationPolicy() {
     partialRefundPercent: 50,
   });
   const [loading, setLoading] = useState(false);
+  const [initialLoad, setInitialLoad] = useState(true);
+
+  useEffect(() => {
+    // TODO: fetch existing policy (get endpoint)
+    setInitialLoad(false);
+  }, []);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    await new Promise(r => setTimeout(r, 500));
-    toast.success('Cancellation policy updated');
-    setLoading(false);
+    try {
+      await upsertCancellationPolicy(form);
+      toast.success('Cancellation policy updated');
+    } catch (e) {
+      toast.error('Failed to update cancellation policy');
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

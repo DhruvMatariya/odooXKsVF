@@ -1,0 +1,146 @@
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router';
+import { useAuth } from '../../lib/AuthContext';
+import { toast } from 'sonner';
+import { Info } from 'lucide-react';
+
+// Mock user store — keyed by email; role comes from here, not from a UI toggle
+const MOCK_USERS: Record<string, { id: string; fullName: string; email: string; role: 'CUSTOMER' | 'VENDOR'; companyName?: string; gstNumber?: string; productCategory?: string }> = {
+  'demo.customer@rentsure.app': {
+    id: 'usr-1', fullName: 'Arjun Mehta',
+    email: 'demo.customer@rentsure.app', role: 'CUSTOMER',
+  },
+  'demo.vendor@rentsure.app': {
+    id: 'usr-2', fullName: 'Priya Sharma',
+    email: 'demo.vendor@rentsure.app', role: 'VENDOR',
+    companyName: 'ProGear Rentals Pvt. Ltd.',
+    gstNumber: '22AAAAA0000A1Z5',
+    productCategory: 'Cameras & Photography',
+  },
+};
+
+export function Login() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const { login } = useAuth();
+  const navigate = useNavigate();
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+
+    // Simulate POST /api/v1/auth/login — { email, password }
+    // Backend returns { token, refreshToken, user } — role is embedded in user, not a request field
+    await new Promise(r => setTimeout(r, 600));
+
+    const user = MOCK_USERS[email.toLowerCase().trim()];
+    if (user && password === 'Demo@1234') {
+      login(user);
+      toast.success('Welcome back!');
+      // Redirect based on role returned by backend
+      navigate(user.role === 'VENDOR' ? '/vendor/dashboard' : '/customer/products');
+    } else {
+      toast.error('Invalid email or password');
+    }
+    setLoading(false);
+  }
+
+  return (
+    <div>
+      <h1 style={{ color: '#344C3D',textAlign: 'center', fontWeight: 700, fontSize: '32px', letterSpacing: '-0.02em', marginBottom: '6px' }}>
+        Sign in
+      </h1>
+      
+
+      {/* Demo credentials — both roles, since this is a single login page */}
+      <div style={{
+        background: '#BFCFBB', border: '1px solid #8EA58C', borderRadius: '8px',
+        padding: '12px 14px', marginBottom: '24px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '10px' }}>
+          <Info size={13} color="#344C3D" />
+          <span style={{ fontSize: '11px', fontWeight: 700, color: '#344C3D', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Demo Credentials</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <DemoCard
+            label="Customer"
+            email="demo.customer@rentsure.app"
+            onUse={() => { setEmail('demo.customer@rentsure.app'); setPassword('Demo@1234'); }}
+          />
+          <DemoCard
+            label="Vendor"
+            email="demo.vendor@rentsure.app"
+            onUse={() => { setEmail('demo.vendor@rentsure.app'); setPassword('Demo@1234'); }}
+          />
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div>
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#344C3D', marginBottom: '6px' }}>
+            Email
+          </label>
+          <input
+            type="email" value={email} onChange={e => setEmail(e.target.value)}
+            placeholder="you@example.com" required autoComplete="email"
+            style={inputStyle}
+          />
+        </div>
+
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+            <label style={{ fontSize: '13px', fontWeight: 600, color: '#344C3D' }}>Password</label>
+            <Link to="/forgot-password" style={{ fontSize: '12px', color: '#738A6E', textDecoration: 'none', fontWeight: 500 }}>
+              Forgot password?
+            </Link>
+          </div>
+          <input
+            type="password" value={password} onChange={e => setPassword(e.target.value)}
+            placeholder="••••••••" required autoComplete="current-password"
+            style={inputStyle}
+          />
+        </div>
+
+        <button
+          type="submit" disabled={loading}
+          style={{
+            width: '100%', padding: '10px', borderRadius: '8px',
+            background: loading ? '#A9C2A4' : '#738A6E',
+            color: '#fff', border: 'none', fontWeight: 600, fontSize: '14px',
+            cursor: loading ? 'not-allowed' : 'pointer', marginTop: '4px',
+            transition: 'background 0.15s',
+          }}
+        >
+          {loading ? 'Signing in…' : 'Sign in'}
+        </button>
+        <p style={{ color: '#738A6E', fontSize: '14px', marginBottom: '28px' }}>
+        New here? <Link to="/register" style={{ color: '#738A6E', fontWeight: 600 }}>Create an account</Link>
+      </p>
+      </form>
+    </div>
+  );
+}
+
+function DemoCard({ label, email, onUse }: { label: string; email: string; onUse: () => void }) {
+  return (
+    <div style={{ background: 'rgba(52,76,61,0.07)', borderRadius: '6px', padding: '8px 10px' }}>
+      <div style={{ fontSize: '11px', fontWeight: 700, color: '#344C3D', marginBottom: '4px' }}>{label}</div>
+      <div style={{ fontSize: '11px', color: '#4a5568', fontFamily: 'monospace', marginBottom: '2px', wordBreak: 'break-all' }}>{email}</div>
+      <div style={{ fontSize: '11px', color: '#4a5568', fontFamily: 'monospace', marginBottom: '6px' }}>Demo@1234</div>
+      <button
+        type="button" onClick={onUse}
+        style={{ fontSize: '11px', fontWeight: 600, color: '#344C3D', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+      >
+        Use →
+      </button>
+    </div>
+  );
+}
+
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '9px 12px', borderRadius: '8px',
+  border: '1px solid #E4E7E2', background: '#fff',
+  fontSize: '14px', color: '#1A1A1A', outline: 'none',
+  boxSizing: 'border-box',
+};

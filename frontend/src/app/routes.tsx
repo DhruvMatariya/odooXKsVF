@@ -14,6 +14,7 @@ import { ProductDetail } from './screens/customer/ProductDetail';
 import { MyOrders } from './screens/customer/MyOrders';
 import { OrderDetail as CustomerOrderDetail } from './screens/customer/OrderDetail';
 import { Dashboard } from './screens/vendor/Dashboard';
+import { Analytics } from './screens/vendor/Analytics';
 import { ProductList } from './screens/vendor/ProductList';
 import { AddEditProduct } from './screens/vendor/AddEditProduct';
 import { ManageInventory } from './screens/vendor/ManageInventory';
@@ -63,6 +64,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, Component: RedirectDashboard },
       { path: 'dashboard', Component: Dashboard },
+      { path: 'analytics', Component: Analytics },
       { path: 'products', Component: ProductList },
       { path: 'products/new', Component: AddEditProduct },
       { path: 'products/:id/edit', Component: AddEditProduct },

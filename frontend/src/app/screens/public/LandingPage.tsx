@@ -133,9 +133,9 @@ export function LandingPage() {
 
         {/* ── HERO ──────────────────────────────────────────── */}
         <section style={{ paddingTop: '80px', paddingBottom: '60px', textAlign: 'center' }}>
-          <h1 style={{ fontSize: '68px', fontWeight: 800, color: t.text, letterSpacing: '-0.04em', lineHeight: 1.07, maxWidth: '820px', margin: '0px auto 0px' }}>
+          <h1 style={{ fontSize: '68px', fontWeight: 800, color: t.text, letterSpacing: '-0.04em', lineHeight: 1.07, maxWidth: '820px',marginTop:'30px', margin: '0px auto 0px' }}>
             Rent anything.<br />
-            <span style={{ color: t.accent }}>Manage everything.</span>
+            <span style={{ color: t.accent }}><Typewriter text="Manage everything." /></span>
           </h1>
           <p style={{ fontSize: '18px', color: t.textMuted, maxWidth: '580px', margin: '16px auto 32px', lineHeight: 1.65 }}>
             The complete rental operating system. From high-end cameras to heavy machinery handle listings, deposits, and returns with absolute confidence.
@@ -508,4 +508,36 @@ function CountUp({ end, suffix = '', duration = 2000 }: { end: number, suffix?: 
   }, [end, duration, hasAnimated]);
 
   return <span ref={ref}>{count}{suffix}</span>;
+}
+
+function Typewriter({ text }: { text: string }) {
+  const [displayed, setDisplayed] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    
+    if (isDeleting) {
+      if (displayed === '') {
+        timer = setTimeout(() => setIsDeleting(false), 500);
+      } else {
+        timer = setTimeout(() => setDisplayed(displayed.slice(0, -1)), 50);
+      }
+    } else {
+      if (displayed === text) {
+        timer = setTimeout(() => setIsDeleting(true), 2500);
+      } else {
+        timer = setTimeout(() => setDisplayed(text.slice(0, displayed.length + 1)), 120);
+      }
+    }
+    
+    return () => clearTimeout(timer);
+  }, [displayed, isDeleting, text]);
+
+  return (
+    <span>
+      {displayed}
+      <span className="animate-pulse" style={{ fontWeight: 300, marginLeft: '2px', color: 'currentColor' }}>|</span>
+    </span>
+  );
 }

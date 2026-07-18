@@ -13,7 +13,7 @@ export const createVendorProfile = async (userId, profileData, client = pool) =>
 };
 
 export const getVendorProfile = async (userId, client = pool) => {
-    const query = 'SELECT * FROM vendor WHERE user_id = $1';
+    const query = 'SELECT * FROM vendor_profiles WHERE user_id = $1';
     const values = [userId];
     try {
         const result = await client.query(query, values);

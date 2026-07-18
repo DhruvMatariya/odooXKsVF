@@ -6,3 +6,7 @@
 {"error":"Invalid or expired reset token","level":"error","message":"Error resetting password","service":"auth-service","timestamp":"2026-07-17 23:25:49"}
 {"error":"","level":"error","message":"Error connecting to the database:","service":"auth-service","timestamp":"2026-07-18 11:43:50"}
 {"error":"","level":"error","message":"Error connecting to the database:","service":"auth-service","timestamp":"2026-07-18 13:41:37"}
+{"email":"john@example.com","error":"Error sending email: Invalid `to` field. Please use our testing email address instead of domains like `example.com`. See our documentation for more information.","level":"error","message":"Error creating user","service":"auth-service","timestamp":"2026-07-18 14:20:15"}
+{"email":"faldusmith@gmail.com","error":"Error sending email: Unable to fetch data. The request could not be resolved.","level":"error","message":"Error creating user","service":"auth-service","timestamp":"2026-07-18 14:20:43"}
+{"email":"faldusmith@gmail.com","error":"Error sending email: Unable to fetch data. The request could not be resolved.","level":"error","message":"Error creating user","service":"auth-service","timestamp":"2026-07-18 14:21:31"}
+{"email":"smithfaldu11082006@gmail.com","error":"Please verify your email before logging in","level":"error","message":"Error logging in","service":"auth-service","timestamp":"2026-07-18 14:24:04"}

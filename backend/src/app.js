@@ -7,8 +7,8 @@ const app = express();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use('/api/auth',authRouter);
-app.use('/api/auth/docs', docsRouter);
+app.use('/api/v1/auth',authRouter);
+app.use('/api/v1/auth/docs', docsRouter);
 app.use(globalErrorHandler);
 
 

@@ -15,7 +15,10 @@ export const MESSAGES = {
         INVALID_VERIFICATION_TOKEN: 'Invalid or expired verification token',
         REGISTRATION_SUCCESS: 'User created successfully. Please verify your email.',
         PROFILE_FETCHED: 'Profile fetched successfully',
-        PROFILE_NOT_FOUND: 'User not found'
+        PROFILE_NOT_FOUND: 'User not found',
+        VENDOR_ONLY: 'Only vendors can access this resource',
+        VENDOR_PROFILE_CREATED: 'Vendor profile created successfully',
+        VENDOR_PROFILE_EXISTS: 'Vendor profile already exists'
     },
     VALIDATION: {
         MISSING_FIELDS: 'Missing required fields',

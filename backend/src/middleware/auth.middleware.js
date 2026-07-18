@@ -1,6 +1,8 @@
 import { HTTP_STATUS } from '../config/constant.js';
+import { MESSAGES } from '../config/messages.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import { verifyToken } from '../services/jwt.js';
+import pool from '../config/db.js';
 
 export const globalErrorHandler = (err, req, res, next) => {
     const statusCode = err.statusCode || 500;
@@ -33,5 +35,18 @@ export const authorizeRoles = (...roles) => {
             return res.status(HTTP_STATUS.FORBIDDEN).json(new ApiResponse(HTTP_STATUS.FORBIDDEN, 'Insufficient permissions'));
         }
         next();
+    }
+};
+
+export const authorizeVendor = async (req, res, next) => {
+    try {
+        const query = 'SELECT 1 FROM vendor WHERE user_id = $';
+        const result = await pool.query(query, [req.user.id]);
+        if (result.rows.length === 0) {
+            return res.status(HTTP_STATUS.FORBIDDEN).json(new ApiResponse(HTTP_STATUS.FORBIDDEN, MESSAGES.AUTH.VENDOR_ONLY));
+        }
+        next();
+    } catch (err) {
+        return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json(new ApiResponse(HTTP_STATUS.INTERNAL_SERVER_ERROR, MESSAGES.SERVER.INTERNAL_ERROR));
     }
 };

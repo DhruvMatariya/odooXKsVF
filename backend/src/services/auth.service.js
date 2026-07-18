@@ -20,6 +20,7 @@ import {
   markEmailVerificationTokenUsed,
   verifyUserEmail,
 } from "../models/user.model.js";
+import { createVendorProfile, getVendorProfile } from "../models/vendor.model.js";
 import bcrypt from "bcryptjs";
 import { generateToken } from "../services/jwt.js";
 import { sendMail } from "../services/resend.js";
@@ -367,5 +368,34 @@ export const profileService = async (userId) => {
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       MESSAGES.SERVER.INTERNAL_ERROR,
     );
+  }
+};
+
+export const createVendorProfileService = async (userId, profileData) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const user = await getUserById(userId, client);
+    if (!user) {
+      throw new ApiError(HTTP_STATUS.NOT_FOUND, MESSAGES.AUTH.USER_NOT_FOUND);
+    }
+    if (user.role !== 'vendor') {
+      throw new ApiError(HTTP_STATUS.FORBIDDEN, MESSAGES.AUTH.VENDOR_ONLY);
+    }
+    const existingVendor = await getVendorProfile(userId, client);
+    if (existingVendor) {
+      throw new ApiError(HTTP_STATUS.BAD_REQUEST, MESSAGES.AUTH.VENDOR_PROFILE_EXISTS);
+    }
+    const vendorProfile = await createVendorProfile(userId, profileData, client);
+    await client.query("COMMIT");
+    logger.info(MESSAGES.AUTH.VENDOR_PROFILE_CREATED, { userId });
+    return new ApiResponse(HTTP_STATUS.CREATED, MESSAGES.AUTH.VENDOR_PROFILE_CREATED, vendorProfile);
+  } catch (err) {
+    await client.query("ROLLBACK");
+    logger.error("Error creating vendor profile", { error: err.message, userId });
+    if (err instanceof ApiError) throw err;
+    throw new ApiError(HTTP_STATUS.INTERNAL_SERVER_ERROR, MESSAGES.SERVER.INTERNAL_ERROR);
+  } finally {
+    client.release();
   }
 };

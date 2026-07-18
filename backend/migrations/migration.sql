@@ -1,6 +1,5 @@
 CREATE TYPE user_role AS ENUM (
     'customer',
-    'seller',
     'admin'
 );
 
@@ -39,4 +38,13 @@ CREATE TABLE email_verification_tokens (
     expires_at TIMESTAMP NOT NULL,
     used BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT NOW()
+);
+CREATE TABLE vendor_profiles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    GST_number VARCHAR(15) UNIQUE NOT NULL,
+    company_name VARCHAR(150) NOT NULL,
+    product_category VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
 );

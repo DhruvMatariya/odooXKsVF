@@ -3,7 +3,7 @@ const openapi = {
   info: {
     title: 'Auth Service API',
     description:
-      'Authentication and authorization microservice. Handles user registration, login, logout, token refresh, password reset, email verification, and profile management.\n\n## Authentication\n\nMost endpoints are public. The **Profile** endpoint requires a Bearer JWT token in the `Authorization` header.\n\n## Token Lifecycle\n\n- **Access Token (JWT):** 15-minute lifetime, signed with HMAC-SHA256.\n- **Refresh Token:** 7-day lifetime, opaque hex string, single-use (rotated on each refresh).\n- **Password Reset Token:** 15-minute lifetime, SHA-256 hashed before storage.\n- **Email Verification Token:** 24-hour lifetime, SHA-256 hashed before storage.\n\n## Testing Workflow\n\n1. `POST /api/auth/register` — create a new user\n2. `POST /api/auth/verify-email` — verify the email (use token from email)\n3. `POST /api/auth/login` — get access + refresh tokens\n4. `GET /api/auth/profile` — use the access token to fetch profile\n5. `POST /api/auth/refresh-token` — rotate the refresh token\n6. `POST /api/auth/forgot-password` → `POST /api/auth/reset-password` — reset password flow\n7. `POST /api/auth/logout` — invalidate the refresh token',
+      'Authentication and authorization microservice. Handles user registration, login, logout, token refresh, password reset, email verification, and profile management.\n\n## Authentication\n\nMost endpoints are public. The **Profile** endpoint requires a Bearer JWT token in the `Authorization` header.\n\n## Token Lifecycle\n\n- **Access Token (JWT):** 15-minute lifetime, signed with HMAC-SHA256.\n- **Refresh Token:** 7-day lifetime, opaque hex string, single-use (rotated on each refresh).\n- **Password Reset Token:** 15-minute lifetime, SHA-256 hashed before storage.\n- **Email Verification Token:** 24-hour lifetime, SHA-256 hashed before storage.\n\n## Testing Workflow\n\n1. `POST /api/auth/register` — create a new user\n2. `POST /api/auth/verify-email` — verify the email (use token from email)\n3. `POST /api/auth/login` — get access + refresh tokens\n4. `GET /api/auth/profile` — use the access token to fetch profile\n5. `POST /api/auth/profile` — create vendor profile (vendor role required)\n6. `POST /api/auth/refresh-token` — rotate the refresh token\n7. `POST /api/auth/forgot-password` → `POST /api/auth/reset-password` — reset password flow\n8. `POST /api/auth/logout` — invalidate the refresh token',
     version: '1.0.0',
     contact: {
       name: 'Auth Service Team',
@@ -752,6 +752,145 @@ const openapi = {
           },
         },
       },
+      post: {
+        tags: ['Profile'],
+        summary: 'Create vendor profile',
+        description:
+          'Creates a vendor profile for the authenticated user. Requires vendor role and a valid JWT access token. The vendor profile includes GST number, company name, and product category.',
+        operationId: 'createVendorProfile',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/VendorProfileRequest' },
+              examples: {
+                valid: {
+                  summary: 'Valid vendor profile',
+                  value: {
+                    gst_number: '29AAAAA0000A1Z5',
+                    company_name: 'ABC Enterprises',
+                    product_category: 'Electronics',
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '201': {
+            description: 'Vendor profile created',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/VendorProfileResponse' },
+                example: {
+                  statusCode: 201,
+                  message: 'Vendor profile created successfully',
+                  data: {
+                    user_id: '550e8400-e29b-41d4-a716-446655440000',
+                    gst_number: '29AAAAA0000A1Z5',
+                    company_name: 'ABC Enterprises',
+                    product_category: 'Electronics',
+                    created_at: '2026-07-18T10:30:00.000Z',
+                    updated_at: '2026-07-18T10:30:00.000Z',
+                  },
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Validation error or vendor profile already exists',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  validationError: {
+                    summary: 'Invalid request body',
+                    value: {
+                      statusCode: 400,
+                      message: 'GST number must be 15 characters',
+                      data: null,
+                    },
+                  },
+                  profileExists: {
+                    summary: 'Vendor profile already exists',
+                    value: {
+                      statusCode: 400,
+                      message: 'Vendor profile already exists',
+                      data: null,
+                    },
+                  },
+                },
+              },
+            },
+          },
+          '401': {
+            description: 'Unauthorized — missing or invalid token',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  missingToken: {
+                    summary: 'No token provided',
+                    value: {
+                      statusCode: 401,
+                      message: 'Access token required',
+                      data: null,
+                    },
+                  },
+                  invalidToken: {
+                    summary: 'Invalid or expired token',
+                    value: {
+                      statusCode: 401,
+                      message: 'Invalid or expired access token',
+                      data: null,
+                    },
+                  },
+                },
+              },
+            },
+          },
+          '403': {
+            description: 'Forbidden — vendor access required',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  statusCode: 403,
+                  message: 'Only vendors can access this resource',
+                  data: null,
+                },
+              },
+            },
+          },
+          '404': {
+            description: 'User not found',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  statusCode: 404,
+                  message: 'User not found',
+                  data: null,
+                },
+              },
+            },
+          },
+          '500': {
+            description: 'Internal server error',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: {
+                  statusCode: 500,
+                  message: 'Error creating vendor profile',
+                  data: null,
+                },
+              },
+            },
+          },
+        },
+      },
     },
   },
   components: {
@@ -1036,6 +1175,88 @@ const openapi = {
           statusCode: { type: 'integer', example: 200 },
           message: { type: 'string', example: 'Operation successful' },
           data: { type: 'null', nullable: true },
+        },
+      },
+
+      VendorProfileRequest: {
+        type: 'object',
+        required: ['gst_number', 'company_name', 'product_category'],
+        properties: {
+          gst_number: {
+            type: 'string',
+            minLength: 15,
+            maxLength: 15,
+            description: '15-character GST number',
+            example: '29AAAAA0000A1Z5',
+          },
+          company_name: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 150,
+            description: 'Company name',
+            example: 'ABC Enterprises',
+          },
+          product_category: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 100,
+            description: 'Product category',
+            example: 'Electronics',
+          },
+        },
+      },
+
+      VendorProfile: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'string',
+            format: 'uuid',
+            description: 'User UUID (linked to users table)',
+            example: '550e8400-e29b-41d4-a716-446655440000',
+          },
+          user_id: {
+            type: 'string',
+            format: 'uuid',
+            description: 'User UUID',
+            example: '550e8400-e29b-41d4-a716-446655440000',
+          },
+          gst_number: {
+            type: 'string',
+            description: 'GST number',
+            example: '29AAAAA0000A1Z5',
+          },
+          company_name: {
+            type: 'string',
+            description: 'Company name',
+            example: 'ABC Enterprises',
+          },
+          product_category: {
+            type: 'string',
+            description: 'Product category',
+            example: 'Electronics',
+          },
+          created_at: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Profile creation timestamp',
+            example: '2026-07-18T10:30:00.000Z',
+          },
+          updated_at: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Last update timestamp',
+            example: '2026-07-18T10:30:00.000Z',
+          },
+        },
+      },
+
+      VendorProfileResponse: {
+        type: 'object',
+        properties: {
+          statusCode: { type: 'integer', example: 201 },
+          message: { type: 'string', example: 'Vendor profile created successfully' },
+          data: { $ref: '#/components/schemas/VendorProfile' },
         },
       },
 

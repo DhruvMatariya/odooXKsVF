@@ -1,7 +1,7 @@
 import { HTTP_STATUS } from '../config/constant.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import asyncHandler from '../utils/asyncHandler.js';
-import { createUserService, loginUserService, logoutService, refreshTokenService, forgotPasswordService, resetPasswordService, verifyEmailService, profileService } from '../services/auth.service.js';
+import { createUserService, loginUserService, logoutService, refreshTokenService, forgotPasswordService, resetPasswordService, verifyEmailService, profileService, createVendorProfileService } from '../services/auth.service.js';
 
 export function health(req, res) {
     res.status(HTTP_STATUS.OK).json(new ApiResponse(HTTP_STATUS.OK, 'Auth Service is healthy'));
@@ -50,5 +50,10 @@ export const verifyEmailController = asyncHandler(async (req, res) => {
 
 export const profileController = asyncHandler(async (req, res) => {
     const response = await profileService(req.user.id);
+    res.status(response.statusCode).json(response);
+});
+
+export const createVendorProfileController = asyncHandler(async (req, res) => {
+    const response = await createVendorProfileService(req.user.id, req.validated.body);
     res.status(response.statusCode).json(response);
 });

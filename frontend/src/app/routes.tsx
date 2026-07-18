@@ -1,4 +1,5 @@
 import { createBrowserRouter, Navigate } from 'react-router';
+import { LandingPage } from './screens/public/LandingPage';
 import { AuthLayout } from './components/layout/AuthLayout';
 import { CustomerLayout } from './components/layout/CustomerLayout';
 import { VendorLayout } from './components/layout/VendorLayout';
@@ -32,7 +33,7 @@ function RedirectDashboard() { return <Navigate to="/vendor/dashboard" replace /
 export const router = createBrowserRouter([
   {
     path: '/',
-    Component: RedirectLogin,
+    Component: LandingPage,
   },
   {
     Component: AuthLayout,

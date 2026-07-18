@@ -1,6 +1,25 @@
 import { DASHBOARD_STATS, VENDOR_ORDER_EVENTS } from '../../lib/mockData';
 import { formatPrice, formatDateTime } from '../../lib/utils';
 import { TrendingUp, Clock, AlertTriangle, ArrowUpRight, ArrowDownLeft, DollarSign, Shield, Zap } from 'lucide-react';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, Cell } from 'recharts';
+
+const REVENUE_DATA = [
+  { name: 'Mon', revenue: 4000 },
+  { name: 'Tue', revenue: 3000 },
+  { name: 'Wed', revenue: 5000 },
+  { name: 'Thu', revenue: 2780 },
+  { name: 'Fri', revenue: 6890 },
+  { name: 'Sat', revenue: 8390 },
+  { name: 'Sun', revenue: 9490 },
+];
+
+const ORDER_STATUS_DATA = [
+  { name: 'Pending', count: 12 },
+  { name: 'Active', count: 19 },
+  { name: 'Disputed', count: 2 },
+  { name: 'Completed', count: 45 },
+  { name: 'Cancelled', count: 5 },
+];
 
 export function Dashboard() {
   const s = DASHBOARD_STATS;
@@ -75,6 +94,60 @@ export function Dashboard() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
         <StatCard label="Upcoming Returns" value={s.upcomingReturns} icon={<ArrowDownLeft size={16} />} color="#738A6E" bg="rgba(115,138,110,0.08)" />
         <div /> {/* placeholder for future stat */}
+      </div>
+
+      {/* Analytics Charts */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', marginTop: '24px' }}>
+        
+        {/* Revenue Line Graph with Blur Drop Shadow Effect */}
+        <div style={{ background: '#fff', border: '1px solid #E4E7E2', borderRadius: '10px', padding: '24px', position: 'relative' }}>
+          <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#344C3D', marginBottom: '24px' }}>Revenue Overview</h3>
+          <div style={{ width: '100%', height: '240px', position: 'relative' }}>
+            {/* The blurred shadow effect layer */}
+            <div style={{ position: 'absolute', inset: 0, filter: 'blur(12px)', opacity: 0.4, transform: 'translateY(10px)', pointerEvents: 'none' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={REVENUE_DATA} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                  <Line type="monotone" dataKey="revenue" stroke="#738A6E" strokeWidth={4} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            {/* The actual crisp line chart */}
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={REVENUE_DATA} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f4f0" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#8EA58C' }} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#8EA58C' }} tickFormatter={(val) => `₹${val/1000}k`} />
+                <Tooltip 
+                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  itemStyle={{ color: '#344C3D', fontWeight: 600 }}
+                  formatter={(value: number) => [`₹${value}`, 'Revenue']}
+                />
+                <Line type="monotone" dataKey="revenue" stroke="#738A6E" strokeWidth={3} dot={{ r: 4, fill: '#fff', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Order Status Bar Graph */}
+        <div style={{ background: '#fff', border: '1px solid #E4E7E2', borderRadius: '10px', padding: '24px' }}>
+          <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#344C3D', marginBottom: '24px' }}>Order Distribution</h3>
+          <div style={{ width: '100%', height: '240px' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={ORDER_STATUS_DATA} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f4f0" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#8EA58C' }} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#8EA58C' }} />
+                {/* Custom tooltip, cursor={false} removes the background hover effect on the bar */}
+                <Tooltip cursor={false} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                <Bar dataKey="count" fill="#344C3D" radius={[4, 4, 0, 0]}>
+                  {ORDER_STATUS_DATA.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.name === 'Active' ? '#738A6E' : entry.name === 'Disputed' ? '#C97B3D' : '#344C3D'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
       </div>
 
       {/* Activity feed */}

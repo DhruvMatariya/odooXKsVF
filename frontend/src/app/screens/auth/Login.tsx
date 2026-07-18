@@ -53,16 +53,14 @@ export function Login() {
       </h1>
       
 
-      {/* Demo credentials — both roles, since this is a single login page */}
-      <div style={{
-        background: '#BFCFBB', border: '1px solid #8EA58C', borderRadius: '8px',
-        padding: '12px 14px', marginBottom: '24px',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '10px' }}>
-          <Info size={13} color="#344C3D" />
-          <span style={{ fontSize: '11px', fontWeight: 700, color: '#344C3D', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Demo Credentials</span>
+      {/* Premium Demo Credentials */}
+      <div style={{ marginBottom: '28px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', justifyContent: 'center' }}>
+          <div style={{ width: '28px', height: '1px', background: 'rgba(115,138,110,0.3)' }} />
+          <span style={{ fontSize: '11px', fontWeight: 700, color: '#8EA58C', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Demo Access</span>
+          <div style={{ width: '28px', height: '1px', background: 'rgba(115,138,110,0.3)' }} />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
           <DemoCard
             label="Customer"
             email="demo.customer@rentsure.app"
@@ -124,17 +122,31 @@ export function Login() {
 
 function DemoCard({ label, email, onUse }: { label: string; email: string; onUse: () => void }) {
   return (
-    <div style={{ background: 'rgba(52,76,61,0.07)', borderRadius: '6px', padding: '8px 10px' }}>
-      <div style={{ fontSize: '11px', fontWeight: 700, color: '#344C3D', marginBottom: '4px' }}>{label}</div>
-      <div style={{ fontSize: '11px', color: '#4a5568', fontFamily: 'monospace', marginBottom: '2px', wordBreak: 'break-all' }}>{email}</div>
-      <div style={{ fontSize: '11px', color: '#4a5568', fontFamily: 'monospace', marginBottom: '6px' }}>Demo@1234</div>
-      <button
-        type="button" onClick={onUse}
-        style={{ fontSize: '11px', fontWeight: 600, color: '#344C3D', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
-      >
-        Use →
-      </button>
-    </div>
+    <button
+      type="button" onClick={onUse}
+      style={{ 
+        background: 'rgba(255, 255, 255, 0.4)', 
+        border: '1px solid rgba(115,138,110,0.2)', 
+        borderRadius: '12px', padding: '12px',
+        textAlign: 'left', cursor: 'pointer',
+        transition: 'all 0.2s',
+        boxShadow: '0 2px 8px rgba(52,76,61,0.02)',
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.8)';
+        e.currentTarget.style.borderColor = 'rgba(115,138,110,0.4)';
+        e.currentTarget.style.transform = 'translateY(-1px)';
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.4)';
+        e.currentTarget.style.borderColor = 'rgba(115,138,110,0.2)';
+        e.currentTarget.style.transform = 'none';
+      }}
+    >
+      <div style={{ fontSize: '12px', fontWeight: 700, color: '#344C3D', marginBottom: '6px' }}>{label}</div>
+      <div style={{ fontSize: '10px', color: '#738A6E', fontFamily: 'monospace', marginBottom: '2px', wordBreak: 'break-all' }}>{email}</div>
+      <div style={{ fontSize: '10px', color: '#BFCFBB', fontFamily: 'monospace' }}>Demo@1234</div>
+    </button>
   );
 }
 

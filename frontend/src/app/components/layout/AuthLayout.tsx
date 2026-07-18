@@ -1,4 +1,5 @@
-import { Outlet } from 'react-router';
+import { Outlet, Link } from 'react-router';
+import { ArrowLeft } from 'lucide-react';
 
 /* Floating bubble data — varied sizes, positions, delays, durations */
 const BUBBLES = [
@@ -83,6 +84,9 @@ export function AuthLayout() {
 
         {/* Centered glass card wrapping all auth screens */}
         <div className="auth-card">
+          <Link to="/" aria-label="Back to home" style={{ position: 'absolute', top: '24px', left: '24px', color: '#8EA58C', transition: 'color 0.2s' }} onMouseEnter={e => { e.currentTarget.style.color = '#344C3D'; }} onMouseLeave={e => { e.currentTarget.style.color = '#8EA58C'; }}>
+            <ArrowLeft size={20} />
+          </Link>
           {/* Rentsure logo mark at top of every auth screen */}
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',

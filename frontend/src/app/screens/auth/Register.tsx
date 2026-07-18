@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import type { UserRole } from '../../lib/types';
 import { useAuth } from '../../lib/AuthContext';
-import { User, Building2, Check } from 'lucide-react';
+import { User, Building2, Check, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 
 // Matches POST /api/v1/auth/register — discriminated union on role
 // Customer: { role, fullName, email, password }
@@ -21,6 +21,7 @@ export function Register() {
     fullName: '', email: '', password: '',
     companyName: '', gstNumber: '', productCategory: '',
   });
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -114,7 +115,16 @@ export function Register() {
           <input type="email" value={form.email} onChange={e => update('email', e.target.value)} placeholder="you@example.com" required style={inputStyle} />
         </Field>
         <Field label="Password">
-          <input type="password" value={form.password} onChange={e => update('password', e.target.value)} placeholder="Min. 8 characters" required minLength={8} style={inputStyle} />
+          <div style={{ position: 'relative' }}>
+            <input type={showPassword ? 'text' : 'password'} value={form.password} onChange={e => update('password', e.target.value)} placeholder="Min. 8 characters" required minLength={8} style={{ ...inputStyle, paddingRight: '40px' }} />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#8EA58C', padding: 0, display: 'flex' }}
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
         </Field>
 
         {/* Vendor-only fields */}

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useAuth } from '../../lib/AuthContext';
 import { toast } from 'sonner';
-import { Info } from 'lucide-react';
+import { Info, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 
 // Mock user store — keyed by email; role comes from here, not from a UI toggle
 const MOCK_USERS: Record<string, { id: string; fullName: string; email: string; role: 'CUSTOMER' | 'VENDOR'; companyName?: string; gstNumber?: string; productCategory?: string }> = {
@@ -22,6 +22,7 @@ const MOCK_USERS: Record<string, { id: string; fullName: string; email: string; 
 export function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -51,7 +52,6 @@ export function Login() {
       <h1 style={{ color: '#344C3D',textAlign: 'center', fontWeight: 700, fontSize: '32px', letterSpacing: '-0.02em', marginBottom: '6px' }}>
         Sign in
       </h1>
-      
 
       {/* Premium Demo Credentials */}
       <div style={{ marginBottom: '28px' }}>
@@ -93,11 +93,20 @@ export function Login() {
               Forgot password?
             </Link>
           </div>
-          <input
-            type="password" value={password} onChange={e => setPassword(e.target.value)}
-            placeholder="••••••••" required autoComplete="current-password"
-            style={inputStyle}
-          />
+          <div style={{ position: 'relative' }}>
+            <input
+              type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
+              placeholder="••••••••" required autoComplete="current-password"
+              style={{ ...inputStyle, paddingRight: '40px' }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#8EA58C', padding: 0, display: 'flex' }}
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
         </div>
 
         <button

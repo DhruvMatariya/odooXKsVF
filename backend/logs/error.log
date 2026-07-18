@@ -5,3 +5,4 @@
 {"error":"Invalid or expired reset token","level":"error","message":"Error resetting password","service":"auth-service","timestamp":"2026-07-17 23:23:24"}
 {"error":"Invalid or expired reset token","level":"error","message":"Error resetting password","service":"auth-service","timestamp":"2026-07-17 23:25:49"}
 {"error":"","level":"error","message":"Error connecting to the database:","service":"auth-service","timestamp":"2026-07-18 11:43:50"}
+{"error":"","level":"error","message":"Error connecting to the database:","service":"auth-service","timestamp":"2026-07-18 13:41:37"}

@@ -1,14 +1,18 @@
 export type UserRole = 'customer' | 'vendor' | 'admin';
 
+export interface VendorProfile {
+  gst_number: string;
+  company_name: string;
+  product_category: string;
+}
+
 export interface User {
   id: string;
   full_name: string;
   email: string;
   role: UserRole;
-  companyName?: string;
-  gstNumber?: string;
-  productCategory?: string;
-  address?: string;
+  email_verified?: boolean;
+  vendorProfile?: VendorProfile;
 }
 
 export interface Category {

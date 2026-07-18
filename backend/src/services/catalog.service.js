@@ -199,12 +199,17 @@ export const catalogService = {
   },
 
   async listProducts(query) {
-    const { page = 1, limit = 10, search, category, brand, sort = 'name', order = 'asc' } = query;
+    const { page = 1, limit = 10, search, category, brand, sort = 'name', order = 'asc', vendorId } = query;
     const offset = (page - 1) * limit;
-    
-    let whereClause = 'WHERE p.is_deleted = false AND p.status = \'ACTIVE\'';
-    const params = [];
-    let paramIndex = 1;
+
+    // When a vendor is asking for their own catalog (vendorId provided), show all their
+    // non-deleted products regardless of status so they can manage drafts/inactive items too.
+    // Public/customer browsing (no vendorId) only ever sees ACTIVE, non-deleted products.
+    let whereClause = vendorId
+      ? 'WHERE p.is_deleted = false AND p.vendor_user_id = $1'
+      : 'WHERE p.is_deleted = false AND p.status = \'ACTIVE\'';
+    const params = vendorId ? [vendorId] : [];
+    let paramIndex = vendorId ? 2 : 1;
 
     if (search) {
       whereClause += ` AND (p.name ILIKE $${paramIndex} OR p.description ILIKE $${paramIndex})`;

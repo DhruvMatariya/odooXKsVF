@@ -4,6 +4,7 @@ import { Pagination } from '../../components/shared/Pagination';
 import { Plus, Edit2, Trash2, Package, BarChart3 } from 'lucide-react';
 import { toast } from 'sonner';
 import { listProducts, deleteProduct } from '../../lib/api';
+import { useAuth } from '../../lib/AuthContext';
 
 const PAGE_SIZE = 8;
 
@@ -13,6 +14,7 @@ export function ProductList() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   useEffect(() => {
     loadProducts();
@@ -21,7 +23,7 @@ export function ProductList() {
   async function loadProducts() {
     setLoading(true);
     try {
-      const res = await listProducts({ page, limit: PAGE_SIZE });
+      const res = await listProducts({ page, limit: PAGE_SIZE, vendorId: user?.id });
       if (res.data?.data) {
         setProducts(res.data.data || []);
         setTotal(res.data.meta?.total || 0);

@@ -55,12 +55,19 @@ export const createUserService = async (userData) => {
       expiresAt,
       client,
     );
-    await sendMail(
-      email,
-      "Verify your email",
-      verificationToken,
-      "verification",
-    );
+    try {
+      await sendMail(
+        email,
+        "Verify your email",
+        verificationToken,
+        "verification",
+      );
+    } catch (mailErr) {
+      logger.warn("Failed to send verification email, continuing registration", {
+        email,
+        error: mailErr.message,
+      });
+    }
     await client.query("COMMIT");
 
     const { password_hash, ...userData } = user;
@@ -253,7 +260,14 @@ export const forgotPasswordService = async (email) => {
       .update(resetToken)
       .digest("hex");
     await savePasswordResetToken(user.id, hashedResetToken, expiresAt, client);
-    await sendMail(email, "Password Reset Request", resetToken, "reset");
+    try {
+      await sendMail(email, "Password Reset Request", resetToken, "reset");
+    } catch (mailErr) {
+      logger.warn("Failed to send password reset email", {
+        email,
+        error: mailErr.message,
+      });
+    }
     await client.query("COMMIT");
 
     logger.info(MESSAGES.AUTH.RESET_LINK_SENT, { email });

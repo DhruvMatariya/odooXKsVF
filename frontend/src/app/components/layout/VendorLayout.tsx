@@ -90,7 +90,7 @@ export function VendorLayout() {
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: '12px', fontWeight: 700, color: '#344C3D', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.fullName}</div>
-              <div style={{ fontSize: '10px', color: '#738A6E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.companyName ?? 'Vendor'}</div>
+              <div style={{ fontSize: '10px', color: '#738A6E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.vendorProfile?.company_name ?? 'Vendor'}</div>
             </div>
           </NavLink>
           <button

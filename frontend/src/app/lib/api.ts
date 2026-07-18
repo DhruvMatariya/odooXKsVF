@@ -63,7 +63,7 @@ export async function apiFetch<T>(
 
 // API Functions
 export async function getCategories() {
-  return apiFetch('/categories');
+  return apiFetch('/catalog/categories');
 }
 
 export async function listProducts(query: any) {
@@ -134,7 +134,7 @@ export async function deletePricing(pricingId: string) {
 }
 
 export async function createReturnSlot(data: any) {
-  return apiFetch('/orders/vendor/return-slots', {
+  return apiFetch('/catalog/vendor/return-slots', {
     method: 'POST',
     body: JSON.stringify(data),
   });
@@ -143,18 +143,18 @@ export async function createReturnSlot(data: any) {
 export async function getReturnSlots(date?: string) {
   const params = new URLSearchParams();
   if (date) params.set('date', date);
-  return apiFetch(`/orders/vendor/return-slots?${params.toString()}`);
+  return apiFetch(`/catalog/vendor/return-slots?${params.toString()}`);
 }
 
 export async function upsertLateFeeRule(data: any) {
-  return apiFetch('/orders/vendor/late-fee-rule', {
+  return apiFetch('/catalog/vendor/late-fee-rule', {
     method: 'PUT',
     body: JSON.stringify(data),
   });
 }
 
 export async function upsertCancellationPolicy(data: any) {
-  return apiFetch('/orders/vendor/cancellation-policy', {
+  return apiFetch('/catalog/vendor/cancellation-policy', {
     method: 'PUT',
     body: JSON.stringify(data),
   });

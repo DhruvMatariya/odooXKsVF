@@ -1,6 +1,7 @@
 export const MESSAGES = {
     AUTH: {
         USER_ALREADY_EXISTS: 'Email already registered',
+        EMAIL_ALREADY_REGISTERED: 'Email already registered',
         INVALID_CREDENTIALS: 'Invalid email or password',
         EMAIL_NOT_VERIFIED: 'Please verify your email before logging in',
         LOGIN_SUCCESS: 'Login successful',
@@ -9,11 +10,13 @@ export const MESSAGES = {
         INVALID_REFRESH_TOKEN: 'Invalid or expired refresh token',
         USER_NOT_FOUND: 'User not found',
         PASSWORD_RESET_SENT: 'If the email exists, a reset link has been sent',
+        RESET_LINK_SENT: 'If the email exists, a reset link has been sent',
         INVALID_RESET_TOKEN: 'Invalid or expired reset token',
         PASSWORD_RESET_SUCCESS: 'Password reset successfully',
         EMAIL_VERIFIED: 'Email verified successfully',
         INVALID_VERIFICATION_TOKEN: 'Invalid or expired verification token',
         REGISTRATION_SUCCESS: 'User created successfully. Please verify your email.',
+        USER_CREATED: 'User created successfully. Please verify your email.',
         PROFILE_FETCHED: 'Profile fetched successfully',
         PROFILE_NOT_FOUND: 'User not found',
         VENDOR_ONLY: 'Only vendors can access this resource',

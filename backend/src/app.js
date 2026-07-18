@@ -20,7 +20,7 @@ app.use('/uploads', express.static('uploads'));
 
 app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/catalog', catalogRouter);
-app.use('/api/v1/orders', ordersRouter);
+app.use('/api/v1', ordersRouter);
 app.use('/api/v1/docs', docsRouter);
 
 app.use(globalErrorHandler);

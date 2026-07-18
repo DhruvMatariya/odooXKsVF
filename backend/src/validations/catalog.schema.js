@@ -41,6 +41,7 @@ export const listProductsSchema = z.object({
     brand: z.string().max(100).optional(),
     sort: z.enum(['name', 'createdAt', 'startingPrice']).default('name'),
     order: z.enum(['asc', 'desc']).default('asc'),
+    vendorId: z.uuid('Invalid vendor ID').optional(),
   }),
 });
 

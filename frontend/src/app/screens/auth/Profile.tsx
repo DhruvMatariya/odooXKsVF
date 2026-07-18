@@ -1,44 +1,55 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../lib/AuthContext';
 import { toast } from 'sonner';
-import { Edit2, Check, X } from 'lucide-react';
-import { apiFetch } from '../../lib/api';
+import { apiFetch, getCategories } from '../../lib/api';
+import type { VendorProfile } from '../../lib/types';
 
 export function Profile() {
-  const { user, login } = useAuth();
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({
-    fullName: user?.fullName ?? '',
-    companyName: user?.companyName ?? '',
-    gstNumber: user?.gstNumber ?? '',
-    productCategory: user?.productCategory ?? '',
-    address: user?.address ?? '',
-  });
+  const { user, login, logout } = useAuth();
+  const [categories, setCategories] = useState<string[]>([]);
+  const [creatingVendorProfile, setCreatingVendorProfile] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [vendorForm, setVendorForm] = useState({ companyName: '', gstNumber: '', productCategory: '' });
 
-  function update(field: string, value: string) {
-    setForm(f => ({ ...f, [field]: value }));
-  }
-
-  async function handleSave() {
-    if (!user) return;
-    await new Promise(r => setTimeout(r, 400));
-    login({ ...user, ...form });
-    toast.success('Profile updated successfully');
-    setEditing(false);
-  }
-
-  function handleCancel() {
-    setForm({
-      fullName: user?.fullName ?? '',
-      companyName: user?.companyName ?? '',
-      gstNumber: user?.gstNumber ?? '',
-      productCategory: user?.productCategory ?? '',
-      address: user?.address ?? '',
-    });
-    setEditing(false);
-  }
+  useEffect(() => {
+    if (user?.role === 'vendor' && !user.vendorProfile) {
+      getCategories()
+        .then((res: any) => setCategories((res.data || []).map((c: any) => c.name).filter(Boolean)))
+        .catch(() => setCategories([]));
+    }
+  }, [user?.role, user?.vendorProfile]);
 
   if (!user) return null;
+
+  async function handleCreateVendorProfile(e: React.FormEvent) {
+    e.preventDefault();
+    if (!user) return;
+    setSaving(true);
+    try {
+      const res = await apiFetch<VendorProfile>('/auth/profile', {
+        method: 'POST',
+        body: JSON.stringify({
+          gst_number: vendorForm.gstNumber,
+          company_name: vendorForm.companyName,
+          product_category: vendorForm.productCategory,
+        }),
+      });
+      login({ ...user, vendorProfile: res.data }, ...getStoredTokens());
+      toast.success('Vendor profile created successfully');
+      setCreatingVendorProfile(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to create vendor profile');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function getStoredTokens(): [string, string] {
+    return [
+      localStorage.getItem('rentsure_access_token') || '',
+      localStorage.getItem('rentsure_refresh_token') || '',
+    ];
+  }
 
   return (
     <div style={{ width: '100%' }}>
@@ -53,17 +64,17 @@ export function Profile() {
       </div>
 
       <div style={{ background: '#fff', border: '1px solid #E4E7E2', borderRadius: '10px', overflow: 'hidden' }}>
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid #E4E7E2' }}>
+        <div style={{ padding: '20px 24px', borderBottom: user.role === 'vendor' ? '1px solid #E4E7E2' : 'none' }}>
           <div style={{ fontSize: '11px', fontWeight: 600, color: '#8EA58C', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '16px' }}>Account Info</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <ProfileField label="Full Name" editing={false}>
+            <ProfileField label="Full Name">
               <span>{user.full_name}</span>
             </ProfileField>
-            <ProfileField label="Email" editing={false}>
+            <ProfileField label="Email">
               <span style={{ color: '#8EA58C' }}>{user.email}</span>
               <span style={{ fontSize: '11px', color: '#BFCFBB', marginLeft: '8px' }}>(read-only)</span>
             </ProfileField>
-            <ProfileField label="Role" editing={false}>
+            <ProfileField label="Role">
               <span style={{
                 display: 'inline-flex', alignItems: 'center', padding: '2px 10px',
                 borderRadius: '999px', fontSize: '12px', fontWeight: 600,
@@ -74,13 +85,6 @@ export function Profile() {
                 {user.role}
               </span>
             </ProfileField>
-            {user.role === 'CUSTOMER' && (
-              <ProfileField label="Address" editing={editing}>
-                {editing
-                  ? <textarea value={form.address} onChange={e => update('address', e.target.value)} style={{ ...inputStyle, resize: 'vertical' }} rows={3} />
-                  : <span style={{ whiteSpace: 'pre-line', lineHeight: 1.5 }}>{user.address || 'No address provided'}</span>}
-              </ProfileField>
-            )}
           </div>
         </div>
 
@@ -95,7 +99,7 @@ export function Profile() {
                   </button>
                 ) : (
                   <form onSubmit={handleCreateVendorProfile} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <ProfileField label="Company Name" editing={true}>
+                    <ProfileField label="Company Name">
                       <input
                         value={vendorForm.companyName}
                         onChange={(e) => setVendorForm({ ...vendorForm, companyName: e.target.value })}
@@ -104,7 +108,7 @@ export function Profile() {
                         style={inputStyle}
                       />
                     </ProfileField>
-                    <ProfileField label="GST Number" editing={true}>
+                    <ProfileField label="GST Number">
                       <input
                         value={vendorForm.gstNumber}
                         onChange={(e) => setVendorForm({ ...vendorForm, gstNumber: e.target.value.toUpperCase() })}
@@ -114,7 +118,7 @@ export function Profile() {
                         style={inputStyle}
                       />
                     </ProfileField>
-                    <ProfileField label="Product Category" editing={true}>
+                    <ProfileField label="Product Category">
                       <select
                         value={vendorForm.productCategory}
                         onChange={(e) => setVendorForm({ ...vendorForm, productCategory: e.target.value })}
@@ -137,9 +141,10 @@ export function Profile() {
                       </button>
                       <button
                         type="submit"
-                        style={{ padding: '8px 14px', borderRadius: '8px', border: 'none', background: '#738A6E', color: '#fff', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}
+                        disabled={saving}
+                        style={{ padding: '8px 14px', borderRadius: '8px', border: 'none', background: saving ? '#A9C2A4' : '#738A6E', color: '#fff', cursor: saving ? 'not-allowed' : 'pointer', fontSize: '13px', fontWeight: 600 }}
                       >
-                        Save
+                        {saving ? 'Saving…' : 'Save'}
                       </button>
                     </div>
                   </form>
@@ -147,13 +152,13 @@ export function Profile() {
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                <ProfileField label="Company Name" editing={false}>
+                <ProfileField label="Company Name">
                   <span>{user.vendorProfile.company_name}</span>
                 </ProfileField>
-                <ProfileField label="GST Number" editing={false}>
+                <ProfileField label="GST Number">
                   <span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{user.vendorProfile.gst_number}</span>
                 </ProfileField>
-                <ProfileField label="Product Category" editing={false}>
+                <ProfileField label="Product Category">
                   <span>{user.vendorProfile.product_category}</span>
                 </ProfileField>
               </div>
@@ -165,7 +170,7 @@ export function Profile() {
   );
 }
 
-function ProfileField({ label, editing, children }: { label: string; editing: boolean; children: React.ReactNode }) {
+function ProfileField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '16px', alignItems: 'center' }}>
       <span style={{ fontSize: '13px', fontWeight: 500, color: '#738A6E' }}>{label}</span>

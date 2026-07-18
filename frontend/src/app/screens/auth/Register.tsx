@@ -5,7 +5,7 @@ import type { UserRole } from '../../lib/types';
 import { User, Building2, Check, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
 
-const CATEGORIES_API = '/categories';
+const CATEGORIES_API = '/catalog/categories';
 
 export function Register() {
   const [categories, setCategories] = useState<string[]>([]);

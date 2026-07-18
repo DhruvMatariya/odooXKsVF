@@ -1,58 +1,106 @@
 import { Outlet } from 'react-router';
 
+/* Floating bubble data — varied sizes, positions, delays, durations */
+const BUBBLES = [
+  { size: 260, left: '5%',  top: '10%', delay: 0,    duration: 18 },
+  { size: 180, left: '80%', top: '5%',  delay: 3,    duration: 22 },
+  { size: 120, left: '55%', top: '60%', delay: 6,    duration: 16 },
+  { size: 320, left: '70%', top: '70%', delay: 1,    duration: 25 },
+  { size: 90,  left: '20%', top: '75%', delay: 8,    duration: 14 },
+  { size: 200, left: '40%', top: '-5%', delay: 4,    duration: 20 },
+  { size: 150, left: '90%', top: '40%', delay: 2,    duration: 19 },
+  { size: 70,  left: '10%', top: '45%', delay: 10,   duration: 13 },
+  { size: 240, left: '30%', top: '85%', delay: 5,    duration: 23 },
+  { size: 110, left: '60%', top: '30%', delay: 7,    duration: 17 },
+];
+
 export function AuthLayout() {
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', background: '#FAFAF8' }}>
-      {/* Left branding panel */}
+    <>
+      {/* Injected keyframe animation */}
+      <style>{`
+        @keyframes floatBubble {
+          0%   { transform: translateY(0px) scale(1); opacity: 0.07; }
+          33%  { transform: translateY(-30px) scale(1.04); opacity: 0.12; }
+          66%  { transform: translateY(15px) scale(0.97); opacity: 0.06; }
+          100% { transform: translateY(0px) scale(1); opacity: 0.07; }
+        }
+        .auth-card {
+          background: rgba(255,255,255,0.85);
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
+          border: 1px solid rgba(115,138,110,0.15);
+          border-radius: 20px;
+          box-shadow: 0 8px 40px rgba(52,76,61,0.08), 0 1px 3px rgba(52,76,61,0.06);
+          padding: 40px 36px;
+          width: 100%;
+          max-width: 460px;
+          max-height: calc(100vh - 48px);
+          overflow-y: auto;
+          position: relative;
+          z-index: 1;
+        }
+        /* Hide scrollbar for cleaner look but keep functionality */
+        .auth-card::-webkit-scrollbar {
+          display: none;
+        }
+        .auth-card {
+          -ms-overflow-style: none;  /* IE and Edge */
+          scrollbar-width: none;  /* Firefox */
+        }
+      `}</style>
+
       <div style={{
-        width: '420px', flexShrink: 0, background: '#344C3D',
-        display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-        padding: '48px 40px',
-      }} className="hidden lg:flex">
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '48px' }}>
+        height: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #f0f4f0 0%, #FAFAF8 50%, #eef2ee 100%)',
+        padding: '24px',
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+
+        {/* Floating faded bubbles */}
+        {BUBBLES.map((b, i) => (
+          <div
+            key={i}
+            style={{
+              position: 'absolute',
+              left: b.left,
+              top: b.top,
+              width: `${b.size}px`,
+              height: `${b.size}px`,
+              borderRadius: '50%',
+              background: 'radial-gradient(circle at 40% 40%, #738A6E, #344C3D)',
+              opacity: 0.07,
+              animation: `floatBubble ${b.duration}s ${b.delay}s ease-in-out infinite`,
+              pointerEvents: 'none',
+              willChange: 'transform, opacity',
+            }}
+          />
+        ))}
+
+        {/* Centered glass card wrapping all auth screens */}
+        <div className="auth-card">
+          {/* Rentsure logo mark at top of every auth screen */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            gap: '9px', marginBottom: '28px',
+          }}>
             <div style={{
-              width: '32px', height: '32px', borderRadius: '8px',
-              background: '#738A6E', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: '30px', height: '30px', borderRadius: '8px',
+              background: '#344C3D', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
             }}>
-              <span style={{ color: '#fff', fontWeight: 800, fontSize: '17px', letterSpacing: '-0.03em', lineHeight: 1 }}>R</span>
+              <span style={{ color: '#BFCFBB', fontWeight: 800, fontSize: '15px', letterSpacing: '-0.03em' }}>R</span>
             </div>
-            <span style={{ color: '#FAFAF8', fontWeight: 700, fontSize: '20px', letterSpacing: '-0.02em' }}>Rentsure</span>
+            <span style={{ fontWeight: 700, fontSize: '18px', color: '#344C3D', letterSpacing: '-0.02em' }}>Rentsure</span>
           </div>
 
-          <div style={{ marginTop: '40px' }}>
-            <h1 style={{ color: '#FAFAF8', fontWeight: 700, fontSize: '28px', lineHeight: 1.3, letterSpacing: '-0.02em', marginBottom: '16px' }}>
-              Rent anything.<br />Manage everything.
-            </h1>
-            <p style={{ color: '#8EA58C', fontSize: '15px', lineHeight: 1.6 }}>
-              A complete rental management platform for vendors and customers from listing to inspection.
-            </p>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {['Vendor dashboard with live updates', 'Multi-tier pricing per product', 'Damage inspection & deposit management'].map((feat) => (
-            <div key={feat} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#738A6E', flexShrink: 0 }} />
-              <span style={{ fontSize: '13px', color: '#BFCFBB' }}>{feat}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Right form panel */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 24px' }}>
-        <div style={{ width: '100%', maxWidth: '420px' }}>
-          {/* Mobile logo */}
-          <div style={{ marginLeft:'190px',display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '32px' }} className="lg:hidden">
-            <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#344C3D', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ color: '#738A6E', fontWeight: 800, fontSize: '15px', letterSpacing: '-0.03em', lineHeight: 1 }}>R</span>
-            </div>
-            {/* <span style={{ fontWeight: 700, fontSize: '18px', color: '#344C3D' }}>Rentsure</span> */}
-          </div>
           <Outlet />
         </div>
       </div>
-    </div>
+    </>
   );
 }

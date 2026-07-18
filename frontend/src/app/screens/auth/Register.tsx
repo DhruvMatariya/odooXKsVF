@@ -53,12 +53,10 @@ export function Register() {
   if (!role) {
     return (
       <div>
-        <h2 style={{ color: '#344C3D', fontWeight: 700, fontSize: '24px', letterSpacing: '-0.02em', marginBottom: '6px' }}>
+        <h2 style={{ color: '#344C3D', fontWeight: 700, fontSize: '24px', letterSpacing: '-0.02em', marginBottom: '6px', textAlign: 'center' }}>
           Create your account
         </h2>
-        <p style={{ color: '#738A6E', fontSize: '14px', marginBottom: '32px' }}>
-          Already have an account? <Link to="/login" style={{ color: '#738A6E', fontWeight: 600 }}>Sign in</Link>
-        </p>
+       
 
         <p style={{ fontSize: '13px', fontWeight: 600, color: '#344C3D', marginBottom: '14px' }}>I want to sign up as:</p>
 
@@ -76,7 +74,10 @@ export function Register() {
             onClick={() => setRole('VENDOR')}
           />
         </div>
-
+        <br></br>
+         <p style={{ color: '#738A6E', fontSize: '14px', marginBottom: '24px', textAlign: 'center' }}>
+        Already have an account? <Link to="/login" style={{ color: '#738A6E', fontWeight: 600 }}>Sign in</Link>
+      </p>
         <p style={{ textAlign: 'center', fontSize: '12px', color: '#BFCFBB', marginTop: '24px' }}>
           Your role is permanent and cannot be changed later
         </p>
@@ -94,7 +95,7 @@ export function Register() {
         ← Back
       </button>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginBottom: '6px' }}>
         <h2 style={{ color: '#344C3D', fontWeight: 700, fontSize: '22px', letterSpacing: '-0.02em' }}>
           {role === 'CUSTOMER' ? 'Customer' : 'Vendor'} Registration
         </h2>
@@ -102,9 +103,7 @@ export function Register() {
           {role}
         </span>
       </div>
-      <p style={{ color: '#738A6E', fontSize: '14px', marginBottom: '24px' }}>
-        Already have an account? <Link to="/login" style={{ color: '#738A6E', fontWeight: 600 }}>Sign in</Link>
-      </p>
+     
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         {/* Common fields (both roles) */}
@@ -162,6 +161,7 @@ export function Register() {
         >
           {loading ? 'Creating account…' : `Create ${role === 'CUSTOMER' ? 'Customer' : 'Vendor'} Account`}
         </button>
+        
       </form>
     </div>
   );

@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import asyncHandler from '../utils/asyncHandler.js';
 import { validate } from '../validations/validate.js';
-import { registerSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema, refreshTokenSchema, verifyEmailSchema, logoutSchema } from '../validations/register.schema.js';
-import { authenticateUser } from '../middleware/auth.middleware.js';
+import { registerSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema, refreshTokenSchema, verifyEmailSchema, logoutSchema, vendorProfileSchema } from '../validations/register.schema.js';
+import { authenticateUser, authorizeVendor } from '../middleware/auth.middleware.js';
 import {
     health,
     createUserController,
@@ -12,7 +12,8 @@ import {
     forgotPasswordController,
     resetPasswordController,
     verifyEmailController,
-    profileController
+    profileController,
+    createVendorProfileController
 } from '../controllers/auth.controllers.js';
 
 const router = Router();
@@ -26,5 +27,6 @@ router.post('/forgot-password', validate(forgotPasswordSchema), asyncHandler(for
 router.post('/reset-password', validate(resetPasswordSchema), asyncHandler(resetPasswordController));
 router.post('/verify-email', validate(verifyEmailSchema), asyncHandler(verifyEmailController));
 router.get('/profile', authenticateUser, asyncHandler(profileController));
+router.post('/profile', authenticateUser, authorizeVendor, validate(vendorProfileSchema), asyncHandler(createVendorProfileController));
 
 export default router;

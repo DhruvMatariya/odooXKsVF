@@ -5,6 +5,16 @@
 CREATE TYPE order_channel AS ENUM ('ONLINE', 'OFFLINE');
 CREATE TYPE delivery_type AS ENUM ('PICKUP', 'DELIVERY');
 CREATE TYPE deposit_status AS ENUM ('HELD', 'REFUNDED', 'PARTIALLY_DEDUCTED');
+create type order_status AS ENUM (
+    'PENDING_PAYMENT',
+    'CONFIRMED',
+    'DISPATCHED',
+    'HANDED_OVER',
+    'ACTIVE_RENTAL',
+    'RETURN_SCHEDULED',
+    'RETURNED',
+    'CANCELLED'
+);
 
 -- ===== ORDERS =====
 CREATE TABLE orders (

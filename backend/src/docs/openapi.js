@@ -21,6 +21,7 @@ const openapi = {
     { name: 'Inventory', description: 'Product inventory management (vendor)' },
     { name: 'Pricing', description: 'Product pricing tiers (public read, vendor write)' },
     { name: 'Vendor Settings', description: 'Return slots, late fees, cancellation policies (vendor)' },
+    { name: 'Orders', description: 'Order management (customer and vendor)' },
   ],
   paths: {
     '/api/v1/auth/health': {
@@ -388,9 +389,268 @@ const openapi = {
         security: [{ BearerAuth: [] }],
         requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/CancellationPolicyRequest' }, examples: { valid: { summary: 'Standard policy', value: { fullRefundHoursBefore: 24, partialRefundHoursBefore: 6, partialRefundPercent: 50 } } } } } },
         responses: { '200': { description: 'Cancellation policy updated', content: { 'application/json': { schema: { $ref: '#/components/schemas/MessageResponse' }, example: { statusCode: 200, message: 'Cancellation policy updated successfully', data: null } } } }, '400': { description: 'Validation error', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }, '401': { description: 'Unauthorized', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }, '403': { description: 'Forbidden - vendor required', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }, '500': { description: 'Server error', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } } },
+},
       },
     },
-  },
+
+    '/api/v1/orders': {
+      post: {
+        tags: ['Orders'],
+        summary: 'Create order (customer)',
+        description: 'Create a new rental order. Requires customer role. Returns Stripe client secrets for rental fee and deposit payments.',
+        operationId: 'createOrder',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/CreateOrderRequest' },
+              examples: {
+                valid: {
+                  summary: 'Create order',
+                  value: {
+                    productId: 'prod-uuid',
+                    pricingId: 'price-uuid',
+                    quantity: 1,
+                    channel: 'ONLINE',
+                    deliveryType: 'PICKUP',
+                    rentalPeriodStart: '2026-07-20T10:00:00.000Z',
+                    rentalPeriodEnd: '2026-07-22T10:00:00.000Z',
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '201': {
+            description: 'Order created',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/CreateOrderResponse' },
+                example: {
+                  success: true,
+                  message: 'Order created successfully',
+                  data: {
+                    order: {
+                      id: 'order-uuid',
+                      customerUserId: 'user-uuid',
+                      vendorUserId: 'vendor-uuid',
+                      productId: 'prod-uuid',
+                      pricingId: 'price-uuid',
+                      quantity: 1,
+                      channel: 'ONLINE',
+                      status: 'PENDING_PAYMENT',
+                      deliveryType: 'PICKUP',
+                      rentalPeriodStart: '2026-07-20T10:00:00.000Z',
+                      rentalPeriodEnd: '2026-07-22T10:00:00.000Z',
+                      createdAt: '2026-07-18T10:30:00.000Z',
+                      updatedAt: '2026-07-18T10:30:00.000Z',
+                    },
+                    stripeClientSecretRental: 'pi_xxx_secret_xxx',
+                    stripeClientSecretDeposit: 'pi_yyy_secret_yyy',
+                  },
+                },
+              },
+            },
+          },
+          '400': { description: 'Validation error', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '401': { description: 'Unauthorized', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '403': { description: 'Forbidden - customer role required', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '404': { description: 'Product/pricing not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '409': { description: 'Product not active or insufficient inventory', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '500': { description: 'Server error', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+        },
+      },
+      get: {
+        tags: ['Orders'],
+        summary: 'List orders (customer/vendor)',
+        description: 'List orders for the authenticated user. Customers see their orders, vendors see orders for their products.',
+        operationId: 'listOrders',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'status', in: 'query', schema: { type: 'string', enum: ['PENDING_PAYMENT', 'CONFIRMED', 'DISPATCHED', 'REJECTED_AT_DELIVERY', 'REPLACEMENT_REQUESTED', 'HANDED_OVER', 'ACTIVE_RENTAL', 'RETURN_SCHEDULED', 'RETURNED_PENDING_INSPECTION', 'INSPECTED', 'DEPOSIT_REFUNDED', 'PENALTY_APPLIED', 'DISPUTED', 'CANCELLED', 'COMPLETED'] }, description: 'Filter by order status' },
+          { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 }, description: 'Page number' },
+          { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 10 }, description: 'Items per page' },
+        ],
+        responses: {
+          '200': { description: 'Orders list', content: { 'application/json': { schema: { $ref: '#/components/schemas/OrderListResponse' } } } },
+          '401': { description: 'Unauthorized', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '500': { description: 'Server error', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+        },
+      },
+    },
+  
+    '/api/v1/orders/{id}': {
+      get: {
+        tags: ['Orders'],
+        summary: 'Get order by ID',
+        description: 'Returns full order details including product, deposit, payments, and events. Customer can access their orders, vendor can access orders for their products.',
+        operationId: 'getOrderById',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'Order UUID' }],
+        responses: {
+          '200': { description: 'Order details', content: { 'application/json': { schema: { $ref: '#/components/schemas/OrderDetailResponse' } } } },
+          '401': { description: 'Unauthorized', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '403': { description: 'Forbidden - not owner', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '404': { description: 'Order not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '500': { description: 'Server error', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+        },
+      },
+    },
+
+    '/api/v1/vendor/orders': {
+      post: {
+        tags: ['Orders'],
+        summary: 'Create vendor order (vendor)',
+        description: 'Create an offline order on behalf of a customer. Requires vendor role. Marks order as CONFIRMED and creates offline deposit record.',
+        operationId: 'createVendorOrder',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/VendorOrderRequest' },
+              examples: {
+                valid: {
+                  summary: 'Vendor creates order',
+                  value: {
+                    customerEmail: 'customer@example.com',
+                    productId: 'prod-uuid',
+                    pricingId: 'price-uuid',
+                    quantity: 1,
+                    channel: 'OFFLINE',
+                    deliveryType: 'PICKUP',
+                    rentalPeriodStart: '2026-07-20T10:00:00.000Z',
+                    rentalPeriodEnd: '2026-07-22T10:00:00.000Z',
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '201': {
+            description: 'Vendor order created',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/CreateOrderResponse' },
+                example: {
+                  success: true,
+                  message: 'Order created successfully',
+                  data: {
+                    id: 'order-uuid',
+                    customerUserId: 'user-uuid',
+                    vendorUserId: 'vendor-uuid',
+                    productId: 'prod-uuid',
+                    pricingId: 'price-uuid',
+                    quantity: 1,
+                    channel: 'OFFLINE',
+                    status: 'CONFIRMED',
+                    deliveryType: 'PICKUP',
+                    rentalPeriodStart: '2026-07-20T10:00:00.000Z',
+                    rentalPeriodEnd: '2026-07-22T10:00:00.000Z',
+                    createdAt: '2026-07-18T10:30:00.000Z',
+                    updatedAt: '2026-07-18T10:30:00.000Z',
+                  },
+                },
+              },
+            },
+          },
+          '400': { description: 'Validation error', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '401': { description: 'Unauthorized', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '403': { description: 'Forbidden - vendor role required', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '404': { description: 'Customer/product/pricing not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '409': { description: 'Product not active or insufficient inventory', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '500': { description: 'Server error', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+        },
+      },
+    },
+
+    '/api/v1/orders/{id}/dispatch': {
+      post: {
+        tags: ['Orders'],
+        summary: 'Dispatch order (vendor)',
+        description: 'Mark order as dispatched. Requires vendor role and ownership. Order must be in CONFIRMED status.',
+        operationId: 'dispatchOrder',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'Order UUID' }],
+        responses: {
+          '200': { description: 'Order dispatched', content: { 'application/json': { schema: { $ref: '#/components/schemas/CreateOrderResponse' } } } },
+          '400': { description: 'Validation error', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '401': { description: 'Unauthorized', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '403': { description: 'Forbidden - vendor role required or not owner', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '404': { description: 'Order not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '409': { description: 'Invalid state transition', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '500': { description: 'Server error', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+        },
+      },
+    },
+
+    '/api/v1/orders/{id}/confirm-delivery': {
+      post: {
+        tags: ['Orders'],
+        summary: 'Confirm or reject delivery (customer)',
+        description: 'Customer accepts delivery (ACCEPT) or rejects with refund/replace (REJECT). Requires customer role and ownership.',
+        operationId: 'confirmDelivery',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'Order UUID' }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/ConfirmDeliveryRequest' },
+              examples: {
+                accept: { summary: 'Accept delivery', value: { decision: 'ACCEPT' } },
+                rejectRefund: { summary: 'Reject - request refund', value: { decision: 'REJECT', resolution: 'REFUND', reason: 'Item damaged', photos: ['https://example.com/photo.jpg'] } },
+                rejectReplace: { summary: 'Reject - request replacement', value: { decision: 'REJECT', resolution: 'REPLACE', reason: 'Wrong item', photos: [] } },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Delivery confirmed', content: { 'application/json': { schema: { $ref: '#/components/schemas/CreateOrderResponse' } } } },
+          '400': { description: 'Validation error', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '401': { description: 'Unauthorized', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '403': { description: 'Forbidden - customer role required or not owner', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '404': { description: 'Order not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '409': { description: 'Invalid state transition', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '500': { description: 'Server error', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+        },
+      },
+    },
+
+    '/api/v1/orders/{id}/resolve-replacement': {
+      post: {
+        tags: ['Orders'],
+        summary: 'Resolve replacement request (vendor)',
+        description: 'Vendor resolves a replacement request by choosing to redispatch or refund. Requires vendor role and ownership.',
+        operationId: 'resolveReplacement',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'Order UUID' }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/ResolveReplacementRequest' },
+              examples: {
+                redispatch: { summary: 'Redispatch replacement', value: { resolution: 'REDISPATCH' } },
+                refund: { summary: 'Refund instead', value: { resolution: 'REFUND' } },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Replacement resolved', content: { 'application/json': { schema: { $ref: '#/components/schemas/ResolveReplacementResponse' } } } },
+          '400': { description: 'Validation error', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '401': { description: 'Unauthorized', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '403': { description: 'Forbidden - vendor role required or not owner', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '404': { description: 'Order not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '409': { description: 'Invalid state transition', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+          '500': { description: 'Server error', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+        },
+      },
+    },
   components: {
     securitySchemes: {
       BearerAuth: {
@@ -571,8 +831,125 @@ const openapi = {
 
       LateFeeRuleRequest: { type: 'object', required: ['rateType', 'rateAmount', 'maxCap'], properties: { gracePeriodHours: { type: 'integer', minimum: 0, default: 0, example: 2 }, rateType: { type: 'string', enum: ['HOURLY', 'DAILY'], example: 'HOURLY' }, rateAmount: { type: 'integer', minimum: 1, example: 50 }, maxCap: { type: 'integer', minimum: 1, example: 500 } } },
       CancellationPolicyRequest: { type: 'object', properties: { fullRefundHoursBefore: { type: 'integer', minimum: 0, default: 24, example: 24 }, partialRefundHoursBefore: { type: 'integer', minimum: 0, default: 6, example: 6 }, partialRefundPercent: { type: 'integer', minimum: 0, maximum: 100, default: 50, example: 50 } } },
-    },
-  },
+},
+      },
+
+      CreateOrderRequest: {
+        type: 'object',
+        required: ['productId', 'pricingId', 'quantity', 'channel', 'deliveryType', 'rentalPeriodStart', 'rentalPeriodEnd'],
+        properties: {
+          productId: { type: 'string', format: 'uuid', description: 'Product UUID' },
+          pricingId: { type: 'string', format: 'uuid', description: 'Pricing tier UUID' },
+          quantity: { type: 'integer', minimum: 1, default: 1 },
+          channel: { type: 'string', enum: ['ONLINE', 'OFFLINE'], description: 'Order channel' },
+          deliveryType: { type: 'string', enum: ['PICKUP', 'DELIVERY'], description: 'Delivery type' },
+          rentalPeriodStart: { type: 'string', format: 'date-time', description: 'Rental start (ISO 8601)' },
+          rentalPeriodEnd: { type: 'string', format: 'date-time', description: 'Rental end (ISO 8601)' },
+        },
+      },
+      VendorOrderRequest: {
+        type: 'object',
+        required: ['customerEmail', 'productId', 'pricingId', 'quantity', 'channel', 'deliveryType', 'rentalPeriodStart', 'rentalPeriodEnd'],
+        properties: {
+          customerEmail: { type: 'string', format: 'email', description: 'Customer email' },
+          productId: { type: 'string', format: 'uuid', description: 'Product UUID' },
+          pricingId: { type: 'string', format: 'uuid', description: 'Pricing tier UUID' },
+          quantity: { type: 'integer', minimum: 1, default: 1 },
+          channel: { type: 'string', enum: ['OFFLINE'], description: 'Must be OFFLINE for vendor orders' },
+          deliveryType: { type: 'string', enum: ['PICKUP', 'DELIVERY'] },
+          rentalPeriodStart: { type: 'string', format: 'date-time' },
+          rentalPeriodEnd: { type: 'string', format: 'date-time' },
+        },
+      },
+      CreateOrderResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          message: { type: 'string' },
+          data: {
+            type: 'object',
+            properties: {
+              order: { $ref: '#/components/schemas/Order' },
+              stripeClientSecretRental: { type: 'string', nullable: true, description: 'Stripe client secret for rental payment' },
+              stripeClientSecretDeposit: { type: 'string', nullable: true, description: 'Stripe client secret for deposit payment' },
+            },
+          },
+        },
+      },
+      Order: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          customerUserId: { type: 'string', format: 'uuid' },
+          vendorUserId: { type: 'string', format: 'uuid' },
+          productId: { type: 'string', format: 'uuid' },
+          pricingId: { type: 'string', format: 'uuid' },
+          quantity: { type: 'integer' },
+          channel: { type: 'string', enum: ['ONLINE', 'OFFLINE'] },
+          status: { type: 'string', enum: ['PENDING_PAYMENT', 'CONFIRMED', 'DISPATCHED', 'REJECTED_AT_DELIVERY', 'REPLACEMENT_REQUESTED', 'HANDED_OVER', 'ACTIVE_RENTAL', 'RETURN_SCHEDULED', 'RETURNED_PENDING_INSPECTION', 'INSPECTED', 'DEPOSIT_REFUNDED', 'PENALTY_APPLIED', 'DISPUTED', 'CANCELLED', 'COMPLETED'] },
+          deliveryType: { type: 'string', enum: ['PICKUP', 'DELIVERY'] },
+          returnSlotId: { type: 'string', format: 'uuid', nullable: true },
+          rentalPeriodStart: { type: 'string', format: 'date-time' },
+          rentalPeriodEnd: { type: 'string', format: 'date-time' },
+          actualHandoverTime: { type: 'string', format: 'date-time', nullable: true },
+          actualReturnTime: { type: 'string', format: 'date-time', nullable: true },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      OrderDetail: {
+        allOf: [
+          { $ref: '#/components/schemas/Order' },
+          {
+            type: 'object',
+            properties: {
+              product: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, name: { type: 'string' }, thumbnail: { type: 'string', format: 'uri' }, brand: { type: 'string' } } },
+              deposit: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, amountHeld: { type: 'integer' }, status: { type: 'string' }, method: { type: 'string' } }, nullable: true },
+              payments: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, stripePaymentIntentId: { type: 'string' }, amount: { type: 'integer' }, type: { type: 'string' }, status: { type: 'string' } } } },
+              orderEvents: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, fromStatus: { type: 'string' }, toStatus: { type: 'string' }, actorRole: { type: 'string' }, actorUserId: { type: 'string', format: 'uuid', nullable: true }, note: { type: 'string' }, createdAt: { type: 'string', format: 'date-time' } } } },
+            },
+          },
+        ],
+      },
+      OrderListResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          data: { type: 'array', items: { $ref: '#/components/schemas/Order' } },
+          meta: { type: 'object', properties: { page: { type: 'integer' }, limit: { type: 'integer' }, total: { type: 'integer' }, totalPages: { type: 'integer' } } },
+        },
+      },
+      OrderDetailResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          message: { type: 'string' },
+          data: { $ref: '#/components/schemas/OrderDetail' },
+        },
+      },
+      ConfirmDeliveryRequest: {
+        type: 'object',
+        oneOf: [
+          { type: 'object', required: ['decision'], properties: { decision: { type: 'string', enum: ['ACCEPT'] } } },
+          { type: 'object', required: ['decision', 'resolution', 'reason'], properties: { decision: { type: 'string', enum: ['REJECT'] }, resolution: { type: 'string', enum: ['REFUND', 'REPLACE'] }, reason: { type: 'string', minLength: 1 }, photos: { type: 'array', items: { type: 'string', format: 'uri' }, default: [] } } },
+        ],
+        description: 'ACCEPT to confirm delivery, REJECT with REFUND or REPLACE for rejection',
+      },
+      ResolveReplacementRequest: {
+        type: 'object',
+        required: ['resolution'],
+        properties: {
+          resolution: { type: 'string', enum: ['REDISPATCH', 'REFUND'], description: 'REDISPATCH to send replacement, REFUND to process refund' },
+        },
+      },
+      ResolveReplacementResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          message: { type: 'string' },
+          data: { $ref: '#/components/schemas/Order' },
+        },
+      },
 };
 
 export default openapi;

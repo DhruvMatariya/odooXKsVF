@@ -40,12 +40,10 @@ export const authorizeRoles = (...roles) => {
 
 export const authorizeVendor = async (req, res, next) => {
     try {
-        const query = 'SELECT 1 FROM vendor_profiles WHERE user_id = $1';
-        const result = await pool.query(query, [req.user.id]);
-        if (result.rows.length === 0) {
-            return res.status(HTTP_STATUS.FORBIDDEN).json(new ApiResponse(HTTP_STATUS.FORBIDDEN, MESSAGES.AUTH.VENDOR_ONLY));
+        if(req.user.role !== 'vendor') {
+            return res.status(HTTP_STATUS.FORBIDDEN).json(new ApiResponse(HTTP_STATUS.FORBIDDEN, 'Insufficient permissions'));
         }
-        next();
+        next();     
     } catch (err) {
         return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json(new ApiResponse(HTTP_STATUS.INTERNAL_SERVER_ERROR, MESSAGES.SERVER.INTERNAL_ERROR));
     }

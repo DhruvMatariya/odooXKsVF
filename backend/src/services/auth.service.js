@@ -359,6 +359,12 @@ export const profileService = async (userId) => {
         MESSAGES.AUTH.PROFILE_NOT_FOUND,
       );
     }
+    if(user.role==='vendor'){
+      const vendorProfile = await getVendorProfile(userId);
+      if (vendorProfile) {
+        user.vendorProfile = vendorProfile;
+      }
+    }
     logger.info(MESSAGES.AUTH.PROFILE_FETCHED, { userId });
     return new ApiResponse(HTTP_STATUS.OK, MESSAGES.AUTH.PROFILE_FETCHED, user);
   } catch (err) {

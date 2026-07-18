@@ -124,7 +124,7 @@ export const orderController = {
   },
 
   async scheduleReturnSlot(req, res) {
-    const customerUserId = req.user.sub;
+    const customerUserId = req.user.id;
     const order = await orderService.scheduleReturnSlot(req.validated.params.id, customerUserId, req.validated.body.returnSlotId);
     res.status(HTTP_STATUS.OK).json({
       success: true,
@@ -134,7 +134,7 @@ export const orderController = {
   },
 
   async markReturned(req, res) {
-    const vendorUserId = req.user.sub;
+    const vendorUserId = req.user.id;
     const order = await orderService.markReturned(req.validated.params.id, vendorUserId, req.validated.body.actualReturnTime);
     res.status(HTTP_STATUS.OK).json({
       success: true,
@@ -144,7 +144,7 @@ export const orderController = {
   },
 
   async inspectOrder(req, res) {
-    const vendorUserId = req.user.sub;
+    const vendorUserId = req.user.id;
     const result = await orderService.inspectOrder(req.validated.params.id, vendorUserId, req.validated.body);
     res.status(HTTP_STATUS.OK).json({
       success: true,

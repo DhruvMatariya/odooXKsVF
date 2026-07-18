@@ -157,3 +157,90 @@
 {"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:32:06"}
 {"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:32:06"}
 {"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:32:06"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:37:24"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:37:24"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:37:24"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:37:29"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:37:29"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:37:29"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:37:33"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:37:33"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:37:33"}
+{"level":"info","message":"Login successful","service":"auth-service","timestamp":"2026-07-18 15:38:10","userId":"463a8888-ea98-4596-8861-a7578105817d"}
+{"level":"info","message":"Profile fetched successfully","service":"auth-service","timestamp":"2026-07-18 15:38:44","userId":"463a8888-ea98-4596-8861-a7578105817d"}
+{"level":"info","message":"Profile fetched successfully","service":"auth-service","timestamp":"2026-07-18 15:39:00","userId":"463a8888-ea98-4596-8861-a7578105817d"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:39:58"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:39:58"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:39:58"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:40:09"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:40:09"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:40:09"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:40:11"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:40:11"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:40:11"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:40:16"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:40:16"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:40:16"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:40:44"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:40:44"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:40:44"}
+{"level":"info","message":"Profile fetched successfully","service":"auth-service","timestamp":"2026-07-18 15:40:48","userId":"463a8888-ea98-4596-8861-a7578105817d"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:43:27"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:43:27"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:43:27"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:43:30"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:43:30"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:43:30"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:43:32"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:43:32"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:43:32"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:43:34"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:43:34"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:43:34"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:43:36"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:43:36"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:43:36"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:43:38"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:43:38"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:43:38"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:43:41"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:43:41"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:43:41"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:44:12"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:44:12"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:44:12"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:44:18"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:44:18"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:44:18"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:44:23"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:44:23"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:44:23"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:44:34"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:44:34"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:44:34"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:44:35"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:44:35"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:44:35"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:44:40"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:44:40"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:44:40"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:44:44"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:44:44"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:44:44"}
+{"level":"info","message":"Vendor profile created successfully","service":"auth-service","timestamp":"2026-07-18 15:44:50","userId":"463a8888-ea98-4596-8861-a7578105817d"}
+{"level":"info","message":"Profile fetched successfully","service":"auth-service","timestamp":"2026-07-18 15:44:56","userId":"463a8888-ea98-4596-8861-a7578105817d"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:46:13"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:46:13"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:46:13"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:46:22"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:46:22"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:46:22"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:54:38"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:54:38"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:54:38"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:54:54"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:54:54"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:54:54"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 15:55:07"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 15:55:07"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 15:55:07"}

@@ -58,9 +58,29 @@ export function Profile() {
           <h1 style={{ color: '#344C3D', fontWeight: 700, fontSize: '22px', marginBottom: '4px' }}>Profile</h1>
           <p style={{ color: '#738A6E', fontSize: '14px' }}>Manage your account information</p>
         </div>
-        <button onClick={logout} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', border: '1px solid #E4E7E2', background: '#fff', color: '#344C3D', cursor: 'pointer', fontSize: '13px', fontWeight: 500 }}>
-          Logout
-        </button>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          {!editing && (
+            <button onClick={() => setEditing(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', border: '1px solid #E4E7E2', background: '#fff', color: '#344C3D', cursor: 'pointer', fontSize: '13px', fontWeight: 500 }}>
+              <Edit2 size={14} />
+              Edit
+            </button>
+          )}
+          {editing && (
+            <>
+              <button onClick={handleCancel} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', border: '1px solid #E4E7E2', background: '#fff', color: '#6b7280', cursor: 'pointer', fontSize: '13px', fontWeight: 500 }}>
+                <X size={14} />
+                Cancel
+              </button>
+              <button onClick={handleSave} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', border: 'none', background: '#738A6E', color: '#fff', cursor: 'pointer', fontSize: '13px', fontWeight: 500 }}>
+                <Check size={14} />
+                Save
+              </button>
+            </>
+          )}
+          <button onClick={logout} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', border: '1px solid #E4E7E2', background: '#fff', color: '#344C3D', cursor: 'pointer', fontSize: '13px', fontWeight: 500 }}>
+            Logout
+          </button>
+        </div>
       </div>
 
       <div style={{ background: '#fff', border: '1px solid #E4E7E2', borderRadius: '10px', overflow: 'hidden' }}>
@@ -88,10 +108,33 @@ export function Profile() {
           </div>
         </div>
 
-        {user.role === 'vendor' && (
+        {(user.role === 'vendor' || user.role === 'VENDOR') && (
           <div style={{ padding: '20px 24px' }}>
             <div style={{ fontSize: '11px', fontWeight: 600, color: '#8EA58C', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '16px' }}>Vendor Details</div>
-            {!user.vendorProfile ? (
+            {isMockUser ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <ProfileField label="Company Name" editing={editing}>
+                  {editing
+                    ? <input value={form.companyName} onChange={e => update('companyName', e.target.value)} style={inputStyle} />
+                    : <span>{user.companyName || 'Demo Rental Company'}</span>}
+                </ProfileField>
+                <ProfileField label="GST Number" editing={editing}>
+                  {editing
+                    ? <input value={form.gstNumber} onChange={e => update('gstNumber', e.target.value.toUpperCase())} maxLength={15} style={inputStyle} />
+                    : <span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{user.gstNumber || '22AAAAA0000A1Z5'}</span>}
+                </ProfileField>
+                <ProfileField label="Product Category" editing={editing}>
+                  {editing
+                    ? <select value={form.productCategory} onChange={e => update('productCategory', e.target.value)} style={inputStyle}>
+                      <option value="">Select category</option>
+                      {categories.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                    : <span>{user.productCategory || 'Electronics'}</span>}
+                </ProfileField>
+              </div>
+            ) : !user.vendorProfile ? (
               <div>
                 {!creatingVendorProfile ? (
                   <button onClick={() => setCreatingVendorProfile(true)} style={{ padding: '8px 16px', borderRadius: '8px', background: '#738A6E', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 600 }}>

@@ -30,12 +30,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const storedUser = localStorage.getItem('rentsure_user');
       const { accessToken } = getTokens();
       if (storedUser && accessToken) {
-        try {
-          // Verify token by fetching profile
-          const res = await apiFetch<User>('/auth/profile');
-          setUser(res.data!);
-        } catch {
-          clearTokens();
+        if (accessToken === 'mock-access-token') {
+          setUser(JSON.parse(storedUser));
+        } else {
+          try {
+            // Verify token by fetching profile
+            const res = await apiFetch<User>('/auth/profile');
+            setUser(res.data!);
+          } catch {
+            clearTokens();
+          }
         }
       }
       setLoading(false);
@@ -59,8 +63,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      const { refreshToken } = getTokens();
-      if (refreshToken) {
+      const { accessToken, refreshToken } = getTokens();
+      if (refreshToken && accessToken !== 'mock-access-token') {
         await apiFetch('/auth/logout', {
           method: 'POST',
           body: JSON.stringify({ refreshToken }),

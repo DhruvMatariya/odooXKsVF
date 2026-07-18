@@ -93,7 +93,6 @@ export function ProductListing() {
         }
       `}</style>
       <br></br>
-      {/* Filter bar */}
       <div style={{
         background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(16px)',
         border: '1px solid rgba(115,138,110,0.2)', borderRadius: '18px',
@@ -101,7 +100,6 @@ export function ProductListing() {
         display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center',
         boxShadow: '0 4px 20px rgba(52,76,61,0.05)',
       }}>
-        {/* Search */}
         <div style={{ position: 'relative', flex: '1 1 200px' }}>
           <Search size={14} color="#8EA58C" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
           <input
@@ -133,7 +131,6 @@ export function ProductListing() {
           {order === 'asc' ? 'Asc' : 'Desc'}
         </button>
 
-        {/* View toggle */}
         <div style={{ display: 'flex', gap: '4px', background: 'rgba(115,138,110,0.08)', padding: '4px', borderRadius: '10px' }}>
           <button
             onClick={() => switchView('grid')}
@@ -168,7 +165,6 @@ export function ProductListing() {
       {products.length === 0 ? (
         <EmptyState message="No products match your filters." />
       ) : viewMode === 'grid' ? (
-        /* ── GRID VIEW ── */
         <div key={transitionKey} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', gridAutoRows: '1fr', marginBottom: '8px' }}>
           {paged.map((product, idx) => {
             const startingPrice = product.startingPrice || 0;
@@ -242,7 +238,6 @@ export function ProductListing() {
           })}
         </div>
       ) : (
-        /* ── LIST VIEW ── */
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '8px' }}>
           {paged.map(product => {
             const startingPrice = product.startingPrice || 0;
@@ -272,7 +267,6 @@ export function ProductListing() {
                     el.style.background = 'rgba(255,255,255,0.9)';
                   }}
                 >
-                  {/* Thumbnail */}
                   <div style={{ position: 'relative', width: '110px', height: '90px', flexShrink: 0, overflow: 'hidden', background: '#F0F3EF' }}>
                     <img src={product.thumbnail || ''} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.4s ease' }}
                       onMouseEnter={e => (e.currentTarget as HTMLImageElement).style.transform = 'scale(1.1)'}
@@ -285,7 +279,6 @@ export function ProductListing() {
                     )}
                   </div>
 
-                  {/* Info */}
                   <div style={{ flex: 1, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '16px' }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>

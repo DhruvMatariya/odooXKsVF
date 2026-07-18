@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { CheckCircle } from 'lucide-react';
+import { toast } from 'sonner';
+import { apiFetch } from '../../lib/api';
 
 export function ForgotPassword() {
   const [email, setEmail] = useState('');
@@ -10,9 +12,17 @@ export function ForgotPassword() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    await new Promise(r => setTimeout(r, 700));
-    setSent(true);
-    setLoading(false);
+    try {
+      await apiFetch('/auth/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      setSent(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to send reset email');
+    } finally {
+      setLoading(false);
+    }
   }
 
   if (sent) {

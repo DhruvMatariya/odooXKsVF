@@ -2,22 +2,9 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useAuth } from '../../lib/AuthContext';
 import { toast } from 'sonner';
-import { Info, Eye, EyeOff, ArrowLeft } from 'lucide-react';
-
-// Mock user store — keyed by email; role comes from here, not from a UI toggle
-const MOCK_USERS: Record<string, { id: string; fullName: string; email: string; role: 'CUSTOMER' | 'VENDOR'; companyName?: string; gstNumber?: string; productCategory?: string }> = {
-  'demo.customer@rentsure.app': {
-    id: 'usr-1', fullName: 'Arjun Mehta',
-    email: 'demo.customer@rentsure.app', role: 'CUSTOMER',
-  },
-  'demo.vendor@rentsure.app': {
-    id: 'usr-2', fullName: 'Priya Sharma',
-    email: 'demo.vendor@rentsure.app', role: 'VENDOR',
-    companyName: 'ProGear Rentals Pvt. Ltd.',
-    gstNumber: '22AAAAA0000A1Z5',
-    productCategory: 'Cameras & Photography',
-  },
-};
+import { Eye, EyeOff } from 'lucide-react';
+import { apiFetch } from '../../lib/api';
+import type { User } from '../../lib/types';
 
 export function Login() {
   const [email, setEmail] = useState('');
@@ -31,20 +18,20 @@ export function Login() {
     e.preventDefault();
     setLoading(true);
 
-    // Simulate POST /api/v1/auth/login — { email, password }
-    // Backend returns { token, refreshToken, user } — role is embedded in user, not a request field
-    await new Promise(r => setTimeout(r, 600));
+    try {
+      const data = await apiFetch<{ accessToken: string; refreshToken: string; user: User }>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
 
-    const user = MOCK_USERS[email.toLowerCase().trim()];
-    if (user && password === 'Demo@1234') {
-      login(user);
+      login(data.data!.user, data.data!.accessToken, data.data!.refreshToken);
       toast.success('Welcome back!');
-      // Redirect based on role returned by backend
-      navigate(user.role === 'VENDOR' ? '/vendor/dashboard' : '/customer/products');
-    } else {
-      toast.error('Invalid email or password');
+      navigate(data.data!.user.role === 'vendor' ? '/vendor/dashboard' : '/customer/products');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Invalid email or password');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   return (
@@ -52,27 +39,6 @@ export function Login() {
       <h1 style={{ color: '#344C3D',textAlign: 'center', fontWeight: 700, fontSize: '32px', letterSpacing: '-0.02em', marginBottom: '6px' }}>
         Sign in
       </h1>
-
-      {/* Premium Demo Credentials */}
-      <div style={{ marginBottom: '28px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', justifyContent: 'center' }}>
-          <div style={{ width: '28px', height: '1px', background: 'rgba(115,138,110,0.3)' }} />
-          <span style={{ fontSize: '11px', fontWeight: 700, color: '#8EA58C', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Demo Access</span>
-          <div style={{ width: '28px', height: '1px', background: 'rgba(115,138,110,0.3)' }} />
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-          <DemoCard
-            label="Customer"
-            email="demo.customer@rentsure.app"
-            onUse={() => { setEmail('demo.customer@rentsure.app'); setPassword('Demo@1234'); }}
-          />
-          <DemoCard
-            label="Vendor"
-            email="demo.vendor@rentsure.app"
-            onUse={() => { setEmail('demo.vendor@rentsure.app'); setPassword('Demo@1234'); }}
-          />
-        </div>
-      </div>
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         <div>
@@ -126,36 +92,6 @@ export function Login() {
       </p>
       </form>
     </div>
-  );
-}
-
-function DemoCard({ label, email, onUse }: { label: string; email: string; onUse: () => void }) {
-  return (
-    <button
-      type="button" onClick={onUse}
-      style={{ 
-        background: 'rgba(255, 255, 255, 0.4)', 
-        border: '1px solid rgba(115,138,110,0.2)', 
-        borderRadius: '12px', padding: '12px',
-        textAlign: 'left', cursor: 'pointer',
-        transition: 'all 0.2s',
-        boxShadow: '0 2px 8px rgba(52,76,61,0.02)',
-      }}
-      onMouseEnter={e => {
-        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.8)';
-        e.currentTarget.style.borderColor = 'rgba(115,138,110,0.4)';
-        e.currentTarget.style.transform = 'translateY(-1px)';
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.4)';
-        e.currentTarget.style.borderColor = 'rgba(115,138,110,0.2)';
-        e.currentTarget.style.transform = 'none';
-      }}
-    >
-      <div style={{ fontSize: '12px', fontWeight: 700, color: '#344C3D', marginBottom: '6px' }}>{label}</div>
-      <div style={{ fontSize: '10px', color: '#738A6E', fontFamily: 'monospace', marginBottom: '2px', wordBreak: 'break-all' }}>{email}</div>
-      <div style={{ fontSize: '10px', color: '#BFCFBB', fontFamily: 'monospace' }}>Demo@1234</div>
-    </button>
   );
 }
 

@@ -1,22 +1,47 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { PRODUCTS } from '../../lib/mockData';
 import { formatPrice, formatPricingLabel } from '../../lib/utils';
 import { PricingTierCard } from '../../components/shared/PricingTierCard';
 import type { PricingTier } from '../../lib/types';
 import { ChevronDown, ChevronUp, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
+import { getProductById } from '../../lib/api';
 
 export function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const product = PRODUCTS.find(p => p.id === id);
+  const [product, setProduct] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   const [selectedImage, setSelectedImage] = useState(0);
   const [selectedPricing, setSelectedPricing] = useState<PricingTier | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [deliveryType, setDeliveryType] = useState<'PICKUP' | 'DELIVERY'>('PICKUP');
   const [termsOpen, setTermsOpen] = useState(false);
+
+  useEffect(() => {
+    if (id) loadProduct(id);
+  }, [id]);
+
+  async function loadProduct(productId: string) {
+    setLoading(true);
+    try {
+      const res = await getProductById(productId);
+      if (res.data) setProduct(res.data);
+    } catch (e) {
+      toast.error('Failed to load product');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '64px', color: '#8EA58C' }}>
+        <div style={{ fontSize: '22px', fontWeight: 600, color: '#344C3D', marginBottom: '8px' }}>Loading…</div>
+      </div>
+    );
+  }
 
   if (!product) {
     return (
@@ -37,7 +62,7 @@ export function ProductDetail() {
     navigate('/customer/orders');
   }
 
-  const allImages = product.images.length > 0 ? product.images : [{ id: 'main', url: product.thumbnail }];
+  const allImages = product.images && product.images.length > 0 ? product.images : [product.thumbnail];
 
   return (
     <div>
@@ -50,13 +75,13 @@ export function ProductDetail() {
         <div>
           {/* Image gallery */}
           <div style={{ background: '#F0F3EF', borderRadius: '10px', overflow: 'hidden', marginBottom: '12px', height: '380px' }}>
-            <img src={allImages[selectedImage]?.url ?? product.thumbnail} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <img src={allImages[selectedImage] ?? product.thumbnail} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
           {allImages.length > 1 && (
             <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
-              {allImages.map((img, idx) => (
-                <button key={img.id} onClick={() => setSelectedImage(idx)} style={{ width: '64px', height: '48px', borderRadius: '6px', overflow: 'hidden', border: `2px solid ${selectedImage === idx ? '#738A6E' : '#E4E7E2'}`, padding: 0, cursor: 'pointer', flexShrink: 0 }}>
-                  <img src={img.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              {allImages.map((imgUrl, idx) => (
+                <button key={idx} onClick={() => setSelectedImage(idx)} style={{ width: '64px', height: '48px', borderRadius: '6px', overflow: 'hidden', border: `2px solid ${selectedImage === idx ? '#738A6E' : '#E4E7E2'}`, padding: 0, cursor: 'pointer', flexShrink: 0 }}>
+                  <img src={imgUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </button>
               ))}
             </div>

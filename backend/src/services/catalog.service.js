@@ -70,9 +70,9 @@ export const catalogService = {
       }
 
       const productResult = await client.query(
-        `INSERT INTO products (vendor_user_id, category_id, name, description, brand, manufacturer, thumbnail_url, images)
+        `INSERT INTO products (vendor_user_id, category_id, name, description, brand, manufacturer, thumbnail, images)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         RETURNING id, vendor_user_id, category_id, name, description, brand, manufacturer, thumbnail_url, images, status, created_at, updated_at`,
+         RETURNING id, vendor_user_id, category_id, name, description, brand, manufacturer, thumbnail, images, status, created_at, updated_at`,
         [vendorUserId, data.categoryId, data.name.trim(), data.description?.trim() || null, 
          data.brand?.trim() || null, data.manufacturer?.trim() || null, data.thumbnailUrl || null, JSON.stringify(data.images || [])]
       );
@@ -98,8 +98,8 @@ export const catalogService = {
   },
 
   async createProductWithFiles(vendorUserId, data, thumbnailFile, galleryFiles) {
-    const thumbnailUrl = thumbnailFile ? `/uploads/products/${thumbnailFile.filename}` : null;
-    const galleryUrls = galleryFiles?.map(f => `/uploads/products/${f.filename}`) || [];
+    const thumbnailUrl = thumbnailFile ? `/uploads/products/thumbnails/${thumbnailFile.filename}` : null;
+    const galleryUrls = galleryFiles?.map(f => `/uploads/products/gallery/${f.filename}`) || [];
     
     return this.createProduct(vendorUserId, {
       ...data,
@@ -114,7 +114,7 @@ export const catalogService = {
       await client.query('BEGIN');
 
       const existing = await client.query(
-        'SELECT id, category_id, thumbnail_url, images FROM products WHERE id = $1 AND vendor_user_id = $2 AND is_deleted = false',
+        'SELECT id, category_id, thumbnail, images FROM products WHERE id = $1 AND vendor_user_id = $2 AND is_deleted = false',
         [productId, vendorUserId]
       );
       if (existing.rows.length === 0) {
@@ -140,9 +140,9 @@ export const catalogService = {
         }
       }
 
-      const thumbnailUrl = thumbnailFile ? `/uploads/products/${thumbnailFile.filename}` : (data.thumbnailUrl !== undefined ? data.thumbnailUrl : currentProduct.thumbnail_url);
+      const thumbnailUrl = thumbnailFile ? `/uploads/products/thumbnails/${thumbnailFile.filename}` : (data.thumbnail !== undefined ? data.thumbnail : currentProduct.thumbnail);
       const images = galleryFiles?.length > 0 
-        ? galleryFiles.map(f => `/uploads/products/${f.filename}`)
+        ? galleryFiles.map(f => `/uploads/products/gallery/${f.filename}`)
         : (data.images !== undefined ? data.images : (currentProduct.images || []));
 
       const updates = [];
@@ -157,8 +157,8 @@ export const catalogService = {
           idx++;
         }
       }
-      if (thumbnailUrl !== currentProduct.thumbnail_url) {
-        updates.push(`thumbnail_url = $${idx}`);
+      if (thumbnailUrl !== currentProduct.thumbnail) {
+        updates.push(`thumbnail = $${idx}`);
         values.push(thumbnailUrl);
         idx++;
       }
@@ -173,14 +173,14 @@ export const catalogService = {
       updates.push('updated_at = NOW()');
 
       const result = await client.query(
-        `UPDATE products SET ${updates.join(', ')} WHERE id = $1 RETURNING id, name, category_id, brand, manufacturer, status, thumbnail_url, images, created_at`,
+        `UPDATE products SET ${updates.join(', ')} WHERE id = $1 RETURNING id, name, category_id, brand, manufacturer, status, thumbnail, images, created_at`,
         values
       );
 
       await client.query('COMMIT');
 
-      if (thumbnailFile && currentProduct.thumbnail_url) {
-        deleteFile(currentProduct.thumbnail_url);
+      if (thumbnailFile && currentProduct.thumbnail) {
+        deleteFile(currentProduct.thumbnail);
       }
       if (galleryFiles?.length > 0 && currentProduct.images?.length) {
         currentProduct.images.forEach(deleteFile);
@@ -190,8 +190,8 @@ export const catalogService = {
       return { ...result.rows[0], category: catResult.rows[0] };
     } catch (err) {
       await client.query('ROLLBACK');
-      if (thumbnailFile) deleteFile(`/uploads/products/${thumbnailFile.filename}`);
-      if (galleryFiles?.length) galleryFiles.forEach(f => deleteFile(`/uploads/products/${f.filename}`));
+      if (thumbnailFile) deleteFile(`/uploads/products/thumbnails/${thumbnailFile.filename}`);
+      if (galleryFiles?.length) galleryFiles.forEach(f => deleteFile(`/uploads/products/gallery/${f.filename}`));
       throw err;
     } finally {
       client.release();
@@ -324,15 +324,24 @@ export const catalogService = {
       [product.vendor_user_id]
     );
 
+    // Parse images from JSON
+    let images = [];
+    try {
+      images = product.images || [];
+    } catch (e) {
+      images = [];
+    }
+
     return {
       id: product.id,
       name: product.name,
       description: product.description,
       brand: product.brand,
       manufacturer: product.manufacturer,
+      thumbnail: product.thumbnail,
       category: { id: product.categoryId, name: product.categoryName },
       vendor: { id: vendor.id, companyName: vendor.companyName },
-      images: product.images || [],
+      images: images,
       inventory: {
         available: inventory.available,
         reserved: inventory.reserved,

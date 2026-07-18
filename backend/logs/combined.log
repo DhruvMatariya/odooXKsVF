@@ -45,3 +45,4 @@
 {"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 11:51:44"}
 {"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 11:51:44"}
 {"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 11:51:44"}
+{"error":"","level":"error","message":"Error connecting to the database:","service":"auth-service","timestamp":"2026-07-18 13:41:37"}

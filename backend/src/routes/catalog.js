@@ -28,7 +28,7 @@ router.get('/products/:id/inventory', validate(productIdParamSchema), catalogCon
 router.get('/products/:id/pricing', validate(productIdParamSchema), catalogController.getPricing);
 
 // Vendor only
-router.post('/categories', authenticateUser, authorizeRoles('admin'), validate(categorySchema), catalogController.createCategory);
+router.post('/categories', authenticateUser, authorizeRoles('admin', 'vendor'), validate(categorySchema), catalogController.createCategory);
 
 router.post('/products', authenticateUser, authorizeRoles('vendor'), validate(createProductSchema), catalogController.createProduct);
 router.patch('/products/:id', authenticateUser, authorizeRoles('vendor'), validate(updateProductSchema), catalogController.updateProduct);

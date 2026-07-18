@@ -25,7 +25,7 @@ export const catalogController = {
 
   // POST /api/v1/products (vendor)
   async createProduct(req, res) {
-    const vendorUserId = req.user.sub;
+    const vendorUserId = req.user.id;
     const product = await catalogService.createProduct(vendorUserId, req.validated.body);
     res.status(HTTP_STATUS.CREATED).json({
       success: true,
@@ -68,7 +68,7 @@ export const catalogController = {
 
   // PATCH /api/v1/products/:id (vendor, owner)
   async updateProduct(req, res) {
-    const vendorUserId = req.user.sub;
+    const vendorUserId = req.user.id;
     const product = await catalogService.updateProduct(vendorUserId, req.validated.params.id, req.validated.body);
     res.status(HTTP_STATUS.OK).json({
       success: true,
@@ -88,7 +88,7 @@ export const catalogController = {
 
   // DELETE /api/v1/products/:id (vendor, owner, soft delete)
   async deleteProduct(req, res) {
-    const vendorUserId = req.user.sub;
+    const vendorUserId = req.user.id;
     await catalogService.deleteProduct(vendorUserId, req.validated.params.id);
     res.status(HTTP_STATUS.OK).json({
       success: true,
@@ -99,7 +99,7 @@ export const catalogController = {
 
   // PATCH /api/v1/products/:id/inventory (vendor, owner)
   async updateInventory(req, res) {
-    const vendorUserId = req.user.sub;
+    const vendorUserId = req.user.id;
     const inventory = await catalogService.updateInventory(
       vendorUserId,
       req.validated.params.id,
@@ -139,7 +139,7 @@ export const catalogController = {
 
   // POST /api/v1/products/:id/pricing (vendor, owner)
   async createPricing(req, res) {
-    const vendorUserId = req.user.sub;
+    const vendorUserId = req.user.id;
     const pricing = await catalogService.createPricing(vendorUserId, req.validated.params.id, req.validated.body);
     res.status(HTTP_STATUS.CREATED).json({
       success: true,
@@ -172,7 +172,7 @@ export const catalogController = {
 
   // PATCH /api/v1/pricing/:id (vendor, owner via parent product)
   async updatePricing(req, res) {
-    const vendorUserId = req.user.sub;
+    const vendorUserId = req.user.id;
     const pricing = await catalogService.updatePricing(vendorUserId, req.validated.params.id, req.validated.body);
     res.status(HTTP_STATUS.OK).json({
       success: true,
@@ -189,7 +189,7 @@ export const catalogController = {
 
   // DELETE /api/v1/pricing/:id (vendor, owner via parent product)
   async deletePricing(req, res) {
-    const vendorUserId = req.user.sub;
+    const vendorUserId = req.user.id;
     await catalogService.deletePricing(vendorUserId, req.validated.params.id);
     res.status(HTTP_STATUS.OK).json({
       success: true,
@@ -200,7 +200,7 @@ export const catalogController = {
 
   // POST /api/v1/vendor/return-slots (vendor)
   async createReturnSlot(req, res) {
-    const vendorUserId = req.user.sub;
+    const vendorUserId = req.user.id;
     const slot = await catalogService.createReturnSlot(vendorUserId, req.validated.body);
     res.status(HTTP_STATUS.CREATED).json({
       success: true,
@@ -211,7 +211,7 @@ export const catalogController = {
 
   // GET /api/v1/vendor/return-slots?date=
   async getReturnSlots(req, res) {
-    const vendorUserId = req.user.sub;
+    const vendorUserId = req.user.id;
     const slots = await catalogService.getReturnSlots(vendorUserId, req.validated.query.date);
     res.status(HTTP_STATUS.OK).json({
       success: true,
@@ -222,7 +222,7 @@ export const catalogController = {
 
   // PUT /api/v1/vendor/late-fee-rule
   async upsertLateFeeRule(req, res) {
-    const vendorUserId = req.user.sub;
+    const vendorUserId = req.user.id;
     await catalogService.upsertLateFeeRule(vendorUserId, req.validated.body);
     res.status(HTTP_STATUS.OK).json({
       success: true,
@@ -233,7 +233,7 @@ export const catalogController = {
 
   // PUT /api/v1/vendor/cancellation-policy
   async upsertCancellationPolicy(req, res) {
-    const vendorUserId = req.user.sub;
+    const vendorUserId = req.user.id;
     await catalogService.upsertCancellationPolicy(vendorUserId, req.validated.body);
     res.status(HTTP_STATUS.OK).json({
       success: true,

@@ -9,7 +9,7 @@ export const validate = (schema) => (req, res, next) => {
     });
 
     if (!result.success) {
-        const errors = result.error.errors.map(err => ({
+        const errors = result.error.issues.map(err => ({
             field: err.path.join('.'),
             message: err.message
         }));

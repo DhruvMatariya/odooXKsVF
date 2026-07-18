@@ -54,6 +54,7 @@ export const MESSAGES = {
         IDEMPOTENCY_KEY_EXPIRED: 'Idempotency key expired or invalid',
         FORBIDDEN_NOT_OWNER: 'You do not own this order',
         INVALID_STATE_TRANSITION: 'Invalid state transition for this order',
+        SLOT_FULL: 'Return slot is full',
     },
     VALIDATION: {
         MISSING_FIELDS: 'Missing required fields',

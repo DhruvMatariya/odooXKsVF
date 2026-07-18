@@ -1,0 +1,7 @@
+{"email":"john.doe@example.com","error":"Error sending email: Invalid `to` field. Please use our testing email address instead of domains like `example.com`. See our documentation for more information.","level":"error","message":"Error creating user","service":"auth-service","timestamp":"2026-07-17 23:18:08"}
+{"email":"faldusmith@gmail.com","level":"error","message":"Error creating user","service":"auth-service","timestamp":"2026-07-17 23:18:46"}
+{"error":"Invalid or expired verification token","level":"error","message":"Error verifying email","service":"auth-service","timestamp":"2026-07-17 23:20:59"}
+{"email":"faldusmith@gmail.com","error":"Invalid email or password","level":"error","message":"Error logging in","service":"auth-service","timestamp":"2026-07-17 23:21:44"}
+{"error":"Invalid or expired reset token","level":"error","message":"Error resetting password","service":"auth-service","timestamp":"2026-07-17 23:23:24"}
+{"error":"Invalid or expired reset token","level":"error","message":"Error resetting password","service":"auth-service","timestamp":"2026-07-17 23:25:49"}
+{"error":"","level":"error","message":"Error connecting to the database:","service":"auth-service","timestamp":"2026-07-18 11:43:50"}

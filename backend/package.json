@@ -1,0 +1,43 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "backend_for_the_odoo",
+  "keywords": [
+    "rental"
+  ],
+  "homepage": "https://github.com/DhruvMatariya/odooXKsVF#readme",
+  "bugs": {
+    "url": "https://github.com/DhruvMatariya/odooXKsVF/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DhruvMatariya/odooXKsVF.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.22.0",
+    "resend": "^6.17.2",
+    "winston": "^3.19.0",
+    "zod": "^4.4.3",
+    "@aws-sdk/client-s3": "^3.1075.0",
+    "@aws-sdk/s3-request-presigner": "^3.1075.0",
+    "@scalar/express-api-reference": "^0.10.6",
+    "multer": "^2.2.0",
+    "@scalar/express-api-reference": "^0.10.9"
+  }
+}

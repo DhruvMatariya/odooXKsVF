@@ -51,7 +51,7 @@ function toOrderDetailDTO(order) {
 
 export const orderController = {
   async createOrder(req, res) {
-    const customerUserId = req.user.sub;
+    const customerUserId = req.user.id;
     const idempotencyKey = req.headers['idempotency-key'] || null;
     const response = await orderService.createOrder(customerUserId, req.validated.body, idempotencyKey);
     res.status(HTTP_STATUS.CREATED).json({
@@ -66,7 +66,7 @@ export const orderController = {
   },
 
   async createVendorOrder(req, res) {
-    const vendorUserId = req.user.sub;
+    const vendorUserId = req.user.id;
     const order = await orderService.createVendorOrder(vendorUserId, req.validated.body);
     res.status(HTTP_STATUS.CREATED).json({
       success: true,
@@ -76,7 +76,7 @@ export const orderController = {
   },
 
   async getOrderById(req, res) {
-    const order = await orderService.getOrderById(req.validated.params.id, req.user.sub, req.user.role);
+    const order = await orderService.getOrderById(req.validated.params.id, req.user.id, req.user.role);
     res.status(HTTP_STATUS.OK).json({
       success: true,
       message: MESSAGES.ORDERS.ORDER_FETCHED,
@@ -85,7 +85,7 @@ export const orderController = {
   },
 
   async listOrders(req, res) {
-    const result = await orderService.listOrders(req.user.sub, req.user.role, req.validated.query);
+    const result = await orderService.listOrders(req.user.id, req.user.role, req.validated.query);
     res.status(HTTP_STATUS.OK).json({
       success: true,
       data: result.data.map(toOrderResponseDTO),
@@ -94,7 +94,7 @@ export const orderController = {
   },
 
   async dispatchOrder(req, res) {
-    const vendorUserId = req.user.sub;
+    const vendorUserId = req.user.id;
     const order = await orderService.dispatchOrder(req.validated.params.id, vendorUserId);
     res.status(HTTP_STATUS.OK).json({
       success: true,
@@ -104,7 +104,7 @@ export const orderController = {
   },
 
   async confirmDelivery(req, res) {
-    const customerUserId = req.user.sub;
+    const customerUserId = req.user.id;
     const order = await orderService.confirmDelivery(req.validated.params.id, customerUserId, req.validated.body);
     res.status(HTTP_STATUS.OK).json({
       success: true,
@@ -114,7 +114,7 @@ export const orderController = {
   },
 
   async resolveReplacement(req, res) {
-    const vendorUserId = req.user.sub;
+    const vendorUserId = req.user.id;
     const result = await orderService.resolveReplacement(req.validated.params.id, vendorUserId, req.validated.body.resolution);
     res.status(HTTP_STATUS.OK).json({
       success: true,

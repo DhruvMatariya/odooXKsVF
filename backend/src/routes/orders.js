@@ -16,27 +16,19 @@ import {
   listOrdersQuerySchema,
   vendorOrderSchema,
 } from '../validations/order.schema.js';
-import {
-  createOrder,
-  createVendorOrder,
-  getOrderById,
-  listOrders,
-  dispatchOrder,
-  confirmDelivery,
-  resolveReplacement,
-} from '../controllers/order.controller.js';
+import { orderController } from '../controllers/order.controller.js';
 
 const router = express.Router();
 
-router.post('/orders', authenticateUser, authorizeRoles('customer'), validate(createOrderSchema), createOrder);
-router.get('/orders', authenticateUser, validate(listOrdersQuerySchema), listOrders);
-router.get('/orders/:id', authenticateUser, validate(orderIdParamSchema), getOrderById);
+router.post('/orders', authenticateUser, authorizeRoles('customer'), validate(createOrderSchema), orderController.createOrder);
+router.get('/orders', authenticateUser, validate(listOrdersQuerySchema), orderController.listOrders);
+router.get('/orders/:id', authenticateUser, validate(orderIdParamSchema), orderController.getOrderById);
 
-router.post('/vendor/orders', authenticateUser, authorizeRoles('vendor'), validate(vendorOrderSchema), createVendorOrder);
-router.post('/orders/:id/dispatch', authenticateUser, authorizeRoles('vendor'), validate(orderIdParamSchema), dispatchOrder);
-router.post('/orders/:id/confirm-delivery', authenticateUser, authorizeRoles('customer'), validate(confirmDeliverySchema), confirmDelivery);
+router.post('/vendor/orders', authenticateUser, authorizeRoles('vendor'), validate(vendorOrderSchema), orderController.createVendorOrder);
+router.post('/orders/:id/dispatch', authenticateUser, authorizeRoles('vendor'), validate(orderIdParamSchema), orderController.dispatchOrder);
+router.post('/orders/:id/confirm-delivery', authenticateUser, authorizeRoles('customer'), validate(confirmDeliverySchema), orderController.confirmDelivery);
 
-router.post('/orders/:id/resolve-replacement', authenticateUser, authorizeRoles('vendor'), validate(resolveReplacementSchema), resolveReplacement);
+router.post('/orders/:id/resolve-replacement', authenticateUser, authorizeRoles('vendor'), validate(resolveReplacementSchema), orderController.resolveReplacement);
 
 router.post('/orders/:id/return-slot', authenticateUser, authorizeRoles('customer'), validate(returnSlotSchema), async (req, res) => {
   res.status(501).json({ success: false, error: { code: 'NOT_IMPLEMENTED', message: 'Return slot not implemented yet' } });

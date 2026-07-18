@@ -18,7 +18,7 @@ const CATEGORIES = [
 export function Register() {
   const [role, setRole] = useState<UserRole | null>(null);
   const [form, setForm] = useState({
-    fullName: '', email: '', password: '',
+    fullName: '', email: '', password: '', address: '',
     companyName: '', gstNumber: '', productCategory: '',
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -41,6 +41,7 @@ export function Register() {
       fullName: form.fullName,
       email: form.email,
       role,
+      address: role === 'CUSTOMER' ? form.address : undefined,
       companyName: role === 'VENDOR' ? form.companyName : undefined,
       gstNumber: role === 'VENDOR' ? form.gstNumber : undefined,
       productCategory: role === 'VENDOR' ? form.productCategory : undefined,
@@ -126,6 +127,12 @@ export function Register() {
             </button>
           </div>
         </Field>
+
+        {role === 'CUSTOMER' && (
+          <Field label="Address">
+            <textarea value={form.address} onChange={e => update('address', e.target.value)} placeholder="Full shipping address" required rows={3} style={{ ...inputStyle, resize: 'vertical' }} />
+          </Field>
+        )}
 
         {/* Vendor-only fields */}
         {role === 'VENDOR' && (

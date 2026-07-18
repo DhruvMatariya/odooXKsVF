@@ -11,6 +11,7 @@ export function Profile() {
     companyName: user?.companyName ?? '',
     gstNumber: user?.gstNumber ?? '',
     productCategory: user?.productCategory ?? '',
+    address: user?.address ?? '',
   });
 
   function update(field: string, value: string) {
@@ -31,6 +32,7 @@ export function Profile() {
       companyName: user?.companyName ?? '',
       gstNumber: user?.gstNumber ?? '',
       productCategory: user?.productCategory ?? '',
+      address: user?.address ?? '',
     });
     setEditing(false);
   }
@@ -84,6 +86,13 @@ export function Profile() {
                 {user.role}
               </span>
             </ProfileField>
+            {user.role === 'CUSTOMER' && (
+              <ProfileField label="Address" editing={editing}>
+                {editing
+                  ? <textarea value={form.address} onChange={e => update('address', e.target.value)} style={{ ...inputStyle, resize: 'vertical' }} rows={3} />
+                  : <span style={{ whiteSpace: 'pre-line', lineHeight: 1.5 }}>{user.address || 'No address provided'}</span>}
+              </ProfileField>
+            )}
           </div>
         </div>
 

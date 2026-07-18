@@ -8,6 +8,7 @@ export interface User {
   companyName?: string;
   gstNumber?: string;
   productCategory?: string;
+  address?: string;
 }
 
 export interface Category {

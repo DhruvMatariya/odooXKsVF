@@ -1,7 +1,8 @@
-import { DASHBOARD_STATS, VENDOR_ORDER_EVENTS } from '../../lib/mockData';
-import { formatPrice, formatDateTime } from '../../lib/utils';
-import { TrendingUp, Clock, AlertTriangle, ArrowUpRight, ArrowDownLeft, DollarSign, Shield, Zap } from 'lucide-react';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, Cell } from 'recharts';
+import { DASHBOARD_STATS } from '../../lib/mockData';
+import { formatPrice } from '../../lib/utils';
+import { TrendingUp, Clock, AlertTriangle, ArrowUpRight, DollarSign, ArrowRight } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { Link } from 'react-router';
 
 const REVENUE_DATA = [
   { name: 'Mon', revenue: 4000 },
@@ -21,6 +22,8 @@ const ORDER_STATUS_DATA = [
   { name: 'Cancelled', count: 5 },
 ];
 
+const COLORS = ['#344C3D', '#738A6E', '#C97B3D', '#8EA58C', '#BFCFBB'];
+
 export function Dashboard() {
   const s = DASHBOARD_STATS;
 
@@ -29,173 +32,110 @@ export function Dashboard() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px' }}>
         <div>
-          <h1 style={{ color: '#344C3D', fontWeight: 700, fontSize: '22px', letterSpacing: '-0.02em', marginBottom: '4px' }}>Dashboard</h1>
+          <h1 style={{ color: '#344C3D', fontWeight: 700, fontSize: '24px', letterSpacing: '-0.02em', marginBottom: '4px' }}>Dashboard</h1>
           <p style={{ color: '#738A6E', fontSize: '14px' }}>Today's overview — {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(115,138,110,0.12)', padding: '6px 12px', borderRadius: '999px' }}>
-          <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#738A6E', animation: 'pulse 2s infinite' }} />
-          <span style={{ fontSize: '12px', fontWeight: 600, color: '#344C3D' }}>Live</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(115,138,110,0.12)', padding: '6px 12px', borderRadius: '100px' }}>
+          <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#738A6E', animation: 'pulse 2s infinite' }} />
+          <span style={{ fontSize: '12px', fontWeight: 600, color: '#344C3D' }}>Live Overview</span>
         </div>
       </div>
 
-      {/* Stats grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
-        <StatCard
-          label="Active Rentals"
-          value={s.activeRentals}
-          icon={<TrendingUp size={16} />}
-          color="#738A6E"
-          bg="rgba(115,138,110,0.08)"
-        />
-        <StatCard
-          label="Due Today"
-          value={s.dueToday}
-          icon={<Clock size={16} />}
-          color="#738A6E"
-          bg="rgba(115,138,110,0.08)"
-        />
-        <StatCard
-          label="Overdue"
-          value={s.overdue}
-          icon={<AlertTriangle size={16} />}
-          color="#C97B3D"
-          bg="rgba(201,123,61,0.1)"
-          highlight
-        />
-        <StatCard
-          label="Upcoming Pickups"
-          value={s.upcomingPickups}
-          icon={<ArrowUpRight size={16} />}
-          color="#738A6E"
-          bg="rgba(115,138,110,0.08)"
-        />
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+      {/* Primary KPI Grid (Simplified from before) */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: '16px', marginBottom: '24px' }}>
         <RevenueCard value={s.revenue} />
-        <StatCard
-          label="Deposits Held"
-          value={formatPrice(s.depositsHeld)}
-          isString
-          icon={<Shield size={16} />}
-          color="#344C3D"
-          bg="rgba(52,76,61,0.08)"
-        />
-        <StatCard
-          label="Late Fees Collected"
-          value={formatPrice(s.lateFeesCollected)}
-          isString
-          icon={<Zap size={16} />}
-          color="#C97B3D"
-          bg="rgba(201,123,61,0.08)"
-        />
+        <StatCard label="Active Rentals" value={s.activeRentals} icon={<TrendingUp size={16} />} color="#738A6E" bg="rgba(115,138,110,0.1)" />
+        <StatCard label="Due Today" value={s.dueToday} icon={<Clock size={16} />} color="#738A6E" bg="rgba(115,138,110,0.1)" />
+        <StatCard label="Overdue" value={s.overdue} icon={<AlertTriangle size={16} />} color="#C97B3D" bg="rgba(201,123,61,0.15)" highlight />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-        <StatCard label="Upcoming Returns" value={s.upcomingReturns} icon={<ArrowDownLeft size={16} />} color="#738A6E" bg="rgba(115,138,110,0.08)" />
-        <div /> {/* placeholder for future stat */}
+      {/* Secondary Top KPIs */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '32px' }}>
+        <StatCard label="Upcoming Pickups" value={s.upcomingPickups} icon={<ArrowUpRight size={16} />} color="#344C3D" bg="rgba(52,76,61,0.1)" />
+        <StatCard label="New Requests" value={12} icon={<ArrowUpRight size={16} />} color="#344C3D" bg="rgba(52,76,61,0.1)" />
+        <div /> 
+        <div /> 
       </div>
 
-      {/* Analytics Charts */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', marginTop: '24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+        <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#344C3D' }}>Performance Overview</h2>
+        <Link to="/vendor/analytics" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, color: '#738A6E', textDecoration: 'none', background: 'rgba(115,138,110,0.1)', padding: '8px 16px', borderRadius: '100px', transition: 'all 0.2s' }} onMouseEnter={e => { e.currentTarget.style.background = 'rgba(115,138,110,0.2)'; e.currentTarget.style.color = '#344C3D'; }} onMouseLeave={e => { e.currentTarget.style.background = 'rgba(115,138,110,0.1)'; e.currentTarget.style.color = '#738A6E'; }}>
+          View Detailed Analytics <ArrowRight size={14} />
+        </Link>
+      </div>
+
+      {/* Analytics Charts (Area & Pie) */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px' }}>
         
-        {/* Revenue Line Graph with Blur Drop Shadow Effect */}
-        <div style={{ background: '#fff', border: '1px solid #E4E7E2', borderRadius: '10px', padding: '24px', position: 'relative' }}>
-          <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#344C3D', marginBottom: '24px' }}>Revenue Overview</h3>
-          <div style={{ width: '100%', height: '240px', position: 'relative' }}>
-            {/* The blurred shadow effect layer */}
-            <div style={{ position: 'absolute', inset: 0, filter: 'blur(12px)', opacity: 0.4, transform: 'translateY(10px)', pointerEvents: 'none' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={REVENUE_DATA} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                  <Line type="monotone" dataKey="revenue" stroke="#738A6E" strokeWidth={4} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-            {/* The actual crisp line chart */}
+        {/* Revenue Area Chart */}
+        <div style={{ background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(16px)', border: '1px solid rgba(115,138,110,0.15)', borderRadius: '20px', padding: '24px', boxShadow: '0 8px 32px rgba(52,76,61,0.04)' }}>
+          <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#344C3D', marginBottom: '24px' }}>Revenue (7 Days)</h3>
+          <div style={{ width: '100%', height: '260px' }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={REVENUE_DATA} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f4f0" />
+              <AreaChart data={REVENUE_DATA} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                <defs>
+                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#738A6E" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#738A6E" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(115,138,110,0.1)" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#8EA58C' }} dy={10} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#8EA58C' }} tickFormatter={(val) => `₹${val/1000}k`} />
                 <Tooltip 
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  contentStyle={{ borderRadius: '12px', border: '1px solid rgba(115,138,110,0.2)', boxShadow: '0 8px 24px rgba(0,0,0,0.08)', background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(8px)' }}
                   itemStyle={{ color: '#344C3D', fontWeight: 600 }}
                   formatter={(value: number) => [`₹${value}`, 'Revenue']}
                 />
-                <Line type="monotone" dataKey="revenue" stroke="#738A6E" strokeWidth={3} dot={{ r: 4, fill: '#fff', strokeWidth: 2 }} activeDot={{ r: 6 }} />
-              </LineChart>
+                <Area type="monotone" dataKey="revenue" stroke="#738A6E" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" animationDuration={1500} />
+              </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Order Status Bar Graph */}
-        <div style={{ background: '#fff', border: '1px solid #E4E7E2', borderRadius: '10px', padding: '24px' }}>
+        {/* Order Distribution Pie Chart */}
+        <div style={{ background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(16px)', border: '1px solid rgba(115,138,110,0.15)', borderRadius: '20px', padding: '24px', boxShadow: '0 8px 32px rgba(52,76,61,0.04)', display: 'flex', flexDirection: 'column' }}>
           <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#344C3D', marginBottom: '24px' }}>Order Distribution</h3>
-          <div style={{ width: '100%', height: '240px' }}>
+          <div style={{ flex: 1, minHeight: '260px' }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={ORDER_STATUS_DATA} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f4f0" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#8EA58C' }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#8EA58C' }} />
-                {/* Custom tooltip, cursor={false} removes the background hover effect on the bar */}
-                <Tooltip cursor={false} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                <Bar dataKey="count" fill="#344C3D" radius={[4, 4, 0, 0]}>
+              <PieChart>
+                <Pie
+                  data={ORDER_STATUS_DATA}
+                  innerRadius={60}
+                  outerRadius={90}
+                  paddingAngle={5}
+                  dataKey="count"
+                  animationDuration={1500}
+                >
                   {ORDER_STATUS_DATA.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.name === 'Active' ? '#738A6E' : entry.name === 'Disputed' ? '#C97B3D' : '#344C3D'} />
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
-                </Bar>
-              </BarChart>
+                </Pie>
+                <Tooltip 
+                  contentStyle={{ borderRadius: '12px', border: '1px solid rgba(115,138,110,0.2)', boxShadow: '0 8px 24px rgba(0,0,0,0.08)', background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(8px)' }}
+                  itemStyle={{ color: '#344C3D', fontWeight: 600 }}
+                />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 600, color: '#344C3D', paddingTop: '20px' }} />
+              </PieChart>
             </ResponsiveContainer>
           </div>
-        </div>
-      </div>
-
-      {/* Activity feed */}
-      <div style={{ marginTop: '32px', background: '#fff', border: '1px solid #E4E7E2', borderRadius: '10px', overflow: 'hidden' }}>
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid #E4E7E2', background: '#F0F3EF', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#738A6E' }} />
-          <span style={{ fontSize: '12px', fontWeight: 600, color: '#344C3D', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Recent Activity</span>
-        </div>
-        <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '0' }}>
-          {VENDOR_ORDER_EVENTS.map((event, idx) => {
-            const isLast = idx === VENDOR_ORDER_EVENTS.length - 1;
-            return (
-              <div key={idx} style={{ display: 'flex', gap: '14px', position: 'relative' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '16px' }}>
-                  <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#BFCFBB', border: '2px solid #8EA58C', flexShrink: 0, marginTop: '4px' }} />
-                  {!isLast && <div style={{ width: '2px', flex: 1, background: '#E4E7E2', margin: '4px 0' }} />}
-                </div>
-                <div style={{ paddingBottom: isLast ? '0' : '20px', flex: 1 }}>
-                  <div style={{ fontSize: '13px', color: '#344C3D', fontWeight: 500 }}>
-                    {event.fromStatus && <span style={{ color: '#8EA58C' }}>{event.fromStatus} → </span>}
-                    <strong>{event.toStatus}</strong>
-                    <span style={{ fontSize: '11px', fontWeight: 500, padding: '1px 6px', borderRadius: '4px', background: '#F0F3EF', color: '#738A6E', marginLeft: '6px' }}>
-                      {event.actorRole}
-                    </span>
-                  </div>
-                  {event.note && <div style={{ fontSize: '12px', color: '#8EA58C', marginTop: '2px' }}>{event.note}</div>}
-                  <div style={{ fontSize: '11px', color: '#BFCFBB', marginTop: '3px' }}>{formatDateTime(event.timestamp)}</div>
-                </div>
-              </div>
-            );
-          })}
         </div>
       </div>
     </div>
   );
 }
 
-function StatCard({ label, value, isString, icon, color, bg, highlight }: {
-  label: string; value: number | string; isString?: boolean; icon: React.ReactNode;
+function StatCard({ label, value, icon, color, bg, highlight }: {
+  label: string; value: number | string; icon: React.ReactNode;
   color: string; bg: string; highlight?: boolean;
 }) {
   return (
-    <div style={{ background: '#fff', border: `1px solid ${highlight ? 'rgba(201,123,61,0.25)' : '#E4E7E2'}`, borderRadius: '10px', padding: '16px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-        <span style={{ fontSize: '12px', fontWeight: 600, color: '#8EA58C', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
-        <div style={{ width: '28px', height: '28px', borderRadius: '6px', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color }}>{icon}</div>
+    <div style={{ background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(16px)', border: `1px solid ${highlight ? 'rgba(201,123,61,0.25)' : 'rgba(115,138,110,0.15)'}`, borderRadius: '20px', padding: '20px', boxShadow: '0 8px 32px rgba(52,76,61,0.04)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+        <span style={{ fontSize: '12px', fontWeight: 700, color: '#8EA58C', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</span>
+        <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color }}>{icon}</div>
       </div>
-      <div style={{ fontWeight: 700, fontSize: isString ? '20px' : '28px', color: highlight ? '#C97B3D' : '#344C3D', letterSpacing: isString ? '-0.01em' : '-0.02em' }}>
+      <div style={{ fontWeight: 800, fontSize: '32px', color: highlight ? '#C97B3D' : '#344C3D', letterSpacing: '-0.02em' }}>
         {value}
       </div>
     </div>
@@ -204,18 +144,18 @@ function StatCard({ label, value, isString, icon, color, bg, highlight }: {
 
 function RevenueCard({ value }: { value: number }) {
   return (
-    <div style={{ background: '#344C3D', borderRadius: '10px', padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+    <div style={{ background: 'linear-gradient(135deg, #344C3D 0%, #25382A 100%)', borderRadius: '20px', padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxShadow: '0 12px 32px rgba(52,76,61,0.2)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: '12px', fontWeight: 600, color: '#8EA58C', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total Revenue</span>
-        <div style={{ width: '28px', height: '28px', borderRadius: '6px', background: 'rgba(115,138,110,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <DollarSign size={16} color="#8EA58C" />
+        <span style={{ fontSize: '13px', fontWeight: 700, color: '#BFCFBB', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Total Revenue</span>
+        <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <DollarSign size={16} color="#FAFAF8" />
         </div>
       </div>
       <div>
-        <div style={{ fontWeight: 800, fontSize: '32px', color: '#FAFAF8', letterSpacing: '-0.03em', marginBottom: '4px' }}>
+        <div style={{ fontWeight: 800, fontSize: '36px', color: '#FAFAF8', letterSpacing: '-0.03em', marginBottom: '4px' }}>
           {formatPrice(value)}
         </div>
-        <div style={{ fontSize: '12px', color: '#738A6E' }}>All time earnings</div>
+        <div style={{ fontSize: '13px', color: '#8EA58C', fontWeight: 500 }}>All time earnings</div>
       </div>
     </div>
   );

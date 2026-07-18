@@ -62,8 +62,7 @@ export function ProductList() {
                   <Td>{product.brand}</Td>
                   <td style={{ padding: '14px 16px' }}>
                     <span style={{
-                      fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '999px',
-                      background: product.status === 'ACTIVE' ? 'rgba(115,138,110,0.12)' : 'rgba(0,0,0,0.06)',
+                      fontSize: '12px', fontWeight: 700,
                       color: product.status === 'ACTIVE' ? '#4a6848' : '#6b7280',
                     }}>
                       {product.status}

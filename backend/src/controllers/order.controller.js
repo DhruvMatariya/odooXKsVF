@@ -158,4 +158,39 @@ export const orderController = {
       },
     });
   },
+
+  async cancelOrder(req, res) {
+    const userId = req.user.id;
+    const role = req.user.role;
+    const idempotencyKey = req.headers['idempotency-key'] || null;
+    const result = await orderService.cancelOrder(req.validated.params.id, userId, role, idempotencyKey);
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Order cancelled',
+      data: {
+        order: toOrderResponseDTO(result.order),
+        refundBreakdown: result.refundBreakdown,
+      },
+    });
+  },
+
+  async reportIssue(req, res) {
+    const customerUserId = req.user.id;
+    const order = await orderService.reportIssue(req.validated.params.id, customerUserId, req.validated.body);
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Issue reported, dispute opened',
+      data: toOrderResponseDTO(order),
+    });
+  },
+
+  async resolveDispute(req, res) {
+    const vendorUserId = req.user.id;
+    const order = await orderService.resolveDispute(req.validated.params.id, vendorUserId, req.validated.body);
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Dispute resolved',
+      data: toOrderResponseDTO(order),
+    });
+  },
 };

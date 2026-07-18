@@ -36,17 +36,11 @@ router.post('/orders/:id/mark-returned', authenticateUser, authorizeRoles('vendo
 
 router.post('/orders/:id/inspect', authenticateUser, authorizeRoles('vendor'), validate(inspectSchema), orderController.inspectOrder);
 
-router.post('/orders/:id/report-issue', authenticateUser, authorizeRoles('customer'), validate(reportIssueSchema), async (req, res) => {
-  res.status(501).json({ success: false, error: { code: 'NOT_IMPLEMENTED', message: 'Report issue not implemented yet' } });
-});
+router.post('/orders/:id/report-issue', authenticateUser, authorizeRoles('customer'), validate(reportIssueSchema), orderController.reportIssue);
 
-router.post('/orders/:id/resolve-dispute', authenticateUser, authorizeRoles('vendor'), validate(resolveDisputeSchema), async (req, res) => {
-  res.status(501).json({ success: false, error: { code: 'NOT_IMPLEMENTED', message: 'Resolve dispute not implemented yet' } });
-});
+router.post('/orders/:id/resolve-dispute', authenticateUser, authorizeRoles('vendor'), validate(resolveDisputeSchema), orderController.resolveDispute);
 
-router.post('/orders/:id/cancel', authenticateUser, validate(cancelOrderSchema), async (req, res) => {
-  res.status(501).json({ success: false, error: { code: 'NOT_IMPLEMENTED', message: 'Cancel order not implemented yet' } });
-});
+router.post('/orders/:id/cancel', authenticateUser, validate(cancelOrderSchema), orderController.cancelOrder);
 
 router.post('/orders/:id/mark-paid-offline', authenticateUser, authorizeRoles('vendor'), validate(markPaidOfflineSchema), async (req, res) => {
   res.status(501).json({ success: false, error: { code: 'NOT_IMPLEMENTED', message: 'Mark paid offline not implemented yet' } });

@@ -6,6 +6,9 @@ export const JOB_NAMES = {
   HANDOVER_CONFIRMED_EMAIL: 'handover-confirmed-email',
   DELIVERY_REJECTED_REFUND_EMAIL: 'delivery-rejected-refund-email',
   REPLACEMENT_REQUESTED_EMAIL: 'replacement-requested-email',
+  INSPECTION_COMPLETE_EMAIL: 'inspection-complete-email',
+  ORDER_CANCELLED_EMAIL: 'order-cancelled-email',
+  DISPUTE_REPORTED_EMAIL: 'dispute-reported-email',
 };
 
 class StubQueue {

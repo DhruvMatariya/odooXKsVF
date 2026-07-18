@@ -1,28 +1,69 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { PRODUCTS } from '../../lib/mockData';
 import { ArrowLeft, Lock } from 'lucide-react';
 import { toast } from 'sonner';
+import { getInventory, updateInventory, getProductById } from '../../lib/api';
 
 export function ManageInventory() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const product = PRODUCTS.find(p => p.id === id);
-
-  const [available, setAvailable] = useState(product?.inventory.available ?? 0);
-  const [maintenance, setMaintenance] = useState(product?.inventory.maintenance ?? 0);
+  const [product, setProduct] = useState<any>(null);
+  const [inventory, setInventory] = useState<any>(null);
+  const [available, setAvailable] = useState(0);
+  const [maintenance, setMaintenance] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [initialLoad, setInitialLoad] = useState(true);
 
-  if (!product) return <div style={{ color: '#8EA58C', padding: '32px' }}>Product not found</div>;
+  useEffect(() => {
+    if (id) {
+      loadData(id);
+    }
+  }, [id]);
 
-  async function handleSave() {
-    setLoading(true);
-    await new Promise(r => setTimeout(r, 500));
-    toast.success('Inventory updated successfully');
-    setLoading(false);
+  async function loadData(productId: string) {
+    try {
+      const [productRes, inventoryRes] = await Promise.all([
+        getProductById(productId),
+        getInventory(productId)
+      ]);
+      if (productRes.data) setProduct(productRes.data);
+      if (inventoryRes.data) {
+        setInventory(inventoryRes.data);
+        setAvailable(inventoryRes.data.available);
+        setMaintenance(inventoryRes.data.maintenance);
+      }
+    } catch (e) {
+      toast.error('Failed to load data');
+    } finally {
+      setInitialLoad(false);
+    }
   }
 
-  const inv = product.inventory;
+  async function handleSave() {
+    if (!id) return;
+    setLoading(true);
+    try {
+      await updateInventory(id, { available, maintenance });
+      toast.success('Inventory updated successfully');
+      await loadData(id);
+    } catch (e) {
+      toast.error('Failed to update inventory');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (initialLoad) {
+    return (
+      <div style={{ color: '#8EA58C', padding: '32px', textAlign: 'center' }}>
+        Loading…
+      </div>
+    );
+  }
+
+  if (!product || !inventory) {
+    return <div style={{ color: '#8EA58C', padding: '32px' }}>Product not found</div>;
+  }
 
   return (
     <div style={{ width: '100%' }}>
@@ -55,7 +96,7 @@ export function ManageInventory() {
           {/* Locked: reserved */}
           <InventoryField
             label="Reserved"
-            value={inv.reserved}
+            value={inventory.reserved}
             editable={false}
             locked
             description="Held for confirmed orders (system-managed)"
@@ -64,7 +105,7 @@ export function ManageInventory() {
           {/* Locked: rented */}
           <InventoryField
             label="Rented Out"
-            value={inv.rented}
+            value={inventory.rented}
             editable={false}
             locked
             description="Currently with customers (system-managed)"
@@ -82,7 +123,7 @@ export function ManageInventory() {
 
         <div style={{ padding: '16px 20px', borderTop: '1px solid #E4E7E2', background: '#F0F3EF', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: '13px', color: '#738A6E' }}>
-            Total: <strong style={{ color: '#344C3D' }}>{available + inv.reserved + inv.rented + maintenance}</strong> units
+            Total: <strong style={{ color: '#344C3D' }}>{available + inventory.reserved + inventory.rented + maintenance}</strong> units
           </div>
           <button onClick={handleSave} disabled={loading} style={{ padding: '8px 20px', borderRadius: '8px', border: 'none', background: loading ? '#A9C2A4' : '#738A6E', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer' }}>
             {loading ? 'Saving…' : 'Save Changes'}

@@ -13,3 +13,5 @@
 {"error":"","level":"error","message":"Error connecting to the database:","service":"auth-service","timestamp":"2026-07-18 16:38:08"}
 {"error":"","level":"error","message":"Error connecting to the database:","service":"auth-service","timestamp":"2026-07-18 16:38:25"}
 {"error":"","level":"error","message":"Error connecting to the database:","service":"auth-service","timestamp":"2026-07-18 16:40:10"}
+{"email":"smithfaldu11082006@gmail.com","level":"error","message":"Error creating user","service":"auth-service","timestamp":"2026-07-18 22:23:36"}
+{"email":"smithfaldu11082006@gmail.com","level":"error","message":"Error creating user","service":"auth-service","timestamp":"2026-07-18 22:23:50"}

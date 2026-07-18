@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router';
-import { PRODUCTS, CATEGORIES } from '../../lib/mockData';
-import { formatPrice, getPricingStartingPrice } from '../../lib/utils';
+import { formatPrice } from '../../lib/utils';
 import { Pagination } from '../../components/shared/Pagination';
 import { Search } from 'lucide-react';
+import { listProducts, getCategories } from '../../lib/api';
+import { toast } from 'sonner';
 
 const PAGE_SIZE = 6;
 
@@ -13,21 +14,51 @@ export function ProductListing() {
   const [sort, setSort] = useState('name');
   const [order, setOrder] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
 
-  const filtered = useMemo(() => {
-    let list = PRODUCTS.filter(p => p.status === 'ACTIVE');
-    if (search) list = list.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
-    if (categoryId) list = list.filter(p => p.categoryId === categoryId);
-    list = list.sort((a, b) => {
-      const va = sort === 'price' ? getPricingStartingPrice(a.pricing) : a.name;
-      const vb = sort === 'price' ? getPricingStartingPrice(b.pricing) : b.name;
-      return order === 'asc' ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
-    });
-    return list;
-  }, [search, categoryId, sort, order]);
+  useEffect(() => {
+    loadCategories();
+  }, []);
 
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => {
+    loadProducts();
+  }, [search, categoryId, sort, order, page]);
+
+  async function loadCategories() {
+    try {
+      const res = await getCategories();
+      if (res.data) setCategories(res.data);
+    } catch (e) {
+      toast.error('Failed to load categories');
+    }
+  }
+
+  async function loadProducts() {
+    setLoading(true);
+    try {
+      const res = await listProducts({
+        page,
+        limit: PAGE_SIZE,
+        search,
+        category: categoryId,
+        sort,
+        order,
+      });
+      if (res.data) {
+        setProducts(res.data.data || []);
+        setTotal(res.data.meta?.total || 0);
+      }
+    } catch (e) {
+      toast.error('Failed to load products');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
     <div>
@@ -48,7 +79,7 @@ export function ProductListing() {
         </div>
         <select value={categoryId} onChange={e => { setCategoryId(e.target.value); setPage(1); }} style={selectStyle}>
           <option value="">All categories</option>
-          {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <select value={sort} onChange={e => { setSort(e.target.value); setPage(1); }} style={selectStyle}>
           <option value="name">Sort: Name</option>

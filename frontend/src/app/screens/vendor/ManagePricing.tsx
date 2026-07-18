@@ -1,41 +1,75 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { PRODUCTS } from '../../lib/mockData';
 import { PricingTierCard } from '../../components/shared/PricingTierCard';
 import type { PricingTier } from '../../lib/types';
 import { ArrowLeft, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatPrice } from '../../lib/utils';
+import { getProductById, getPricing, createPricing, updatePricing, deletePricing } from '../../lib/api';
 
 export function ManagePricing() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const product = PRODUCTS.find(p => p.id === id);
-
-  const [tiers, setTiers] = useState<PricingTier[]>(product?.pricing ?? []);
+  const [product, setProduct] = useState<any>(null);
+  const [tiers, setTiers] = useState<PricingTier[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [editTier, setEditTier] = useState<PricingTier | null>(null);
   const [form, setForm] = useState({ period: 'DAY' as 'HOUR' | 'DAY' | 'WEEK', duration: 1, price: 0, deposit: 0 });
+  const [loading, setLoading] = useState(false);
+  const [initialLoad, setInitialLoad] = useState(true);
 
-  if (!product) return <div style={{ color: '#8EA58C', padding: '32px' }}>Product not found</div>;
+  useEffect(() => {
+    if (id) loadData(id);
+  }, [id]);
 
-  function handleSaveTier() {
-    if (editTier) {
-      setTiers(ts => ts.map(t => t.id === editTier.id ? { ...editTier, ...form } : t));
-      toast.success('Pricing tier updated');
-    } else {
-      const newTier: PricingTier = { id: `pr-new-${Date.now()}`, ...form };
-      setTiers(ts => [...ts, newTier]);
-      toast.success('Pricing tier added');
+  async function loadData(productId: string) {
+    try {
+      const [productRes, pricingRes] = await Promise.all([
+        getProductById(productId),
+        getPricing(productId)
+      ]);
+      if (productRes.data) setProduct(productRes.data);
+      if (pricingRes.data) setTiers(pricingRes.data);
+    } catch (e) {
+      toast.error('Failed to load data');
+    } finally {
+      setInitialLoad(false);
     }
-    setShowAdd(false);
-    setEditTier(null);
-    setForm({ period: 'DAY', duration: 1, price: 0, deposit: 0 });
   }
 
-  function handleDelete(tierId: string) {
-    setTiers(ts => ts.filter(t => t.id !== tierId));
-    toast.success('Pricing tier removed');
+  async function handleSaveTier() {
+    if (!id) return;
+    setLoading(true);
+    try {
+      if (editTier) {
+        await updatePricing(editTier.id, form);
+        toast.success('Pricing tier updated');
+      } else {
+        await createPricing(id, form);
+        toast.success('Pricing tier added');
+      }
+      await loadData(id);
+      setShowAdd(false);
+      setEditTier(null);
+      setForm({ period: 'DAY', duration: 1, price: 0, deposit: 0 });
+    } catch (e) {
+      toast.error('Failed to save tier');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleDelete(tierId: string) {
+    setLoading(true);
+    try {
+      await deletePricing(tierId);
+      toast.success('Pricing tier removed');
+      if (id) await loadData(id);
+    } catch (e) {
+      toast.error('Failed to delete tier');
+    } finally {
+      setLoading(false);
+    }
   }
 
   function startEdit(tier: PricingTier) {
@@ -43,6 +77,16 @@ export function ManagePricing() {
     setForm({ period: tier.period, duration: tier.duration, price: tier.price, deposit: tier.deposit });
     setShowAdd(true);
   }
+
+  if (initialLoad) {
+    return (
+      <div style={{ color: '#8EA58C', padding: '32px', textAlign: 'center' }}>
+        Loading…
+      </div>
+    );
+  }
+
+  if (!product) return <div style={{ color: '#8EA58C', padding: '32px' }}>Product not found</div>;
 
   return (
     <div style={{ width: '100%' }}>

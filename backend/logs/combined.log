@@ -283,3 +283,33 @@
 {"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 20:00:41"}
 {"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 20:00:41"}
 {"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 20:00:41"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 21:51:08"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 21:51:08"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 21:51:08"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 21:51:59"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 21:51:59"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 21:51:59"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 22:14:16"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 22:14:16"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 22:14:16"}
+{"level":"info","message":"Login successful","service":"auth-service","timestamp":"2026-07-18 22:22:43","userId":"2aeb8d49-547d-42c0-bfeb-69ee13441a52"}
+{"level":"info","message":"Logout successful","service":"auth-service","timestamp":"2026-07-18 22:22:51"}
+{"email":"smithfaldu11082006@gmail.com","level":"error","message":"Error creating user","service":"auth-service","timestamp":"2026-07-18 22:23:36"}
+{"email":"smithfaldu11082006@gmail.com","level":"error","message":"Error creating user","service":"auth-service","timestamp":"2026-07-18 22:23:50"}
+{"email":"smith.faldu.1108@gmail.com","level":"info","service":"auth-service","timestamp":"2026-07-18 22:25:28","userId":"c31a9200-0e88-471d-b54e-953008df0e34"}
+{"level":"info","message":"Email verified successfully","service":"auth-service","timestamp":"2026-07-18 22:25:55","userId":"c31a9200-0e88-471d-b54e-953008df0e34"}
+{"level":"info","message":"Login successful","service":"auth-service","timestamp":"2026-07-18 22:26:12","userId":"c31a9200-0e88-471d-b54e-953008df0e34"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 22:28:45"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 22:28:45"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 22:28:45"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 22:29:20"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 22:29:20"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 22:29:20"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 22:29:45"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 22:29:45"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 22:29:45"}
+{"level":"info","message":"Database connection successful","service":"auth-service","timestamp":"2026-07-18 22:30:14"}
+{"level":"info","message":"Auth service is running on port 5001","service":"auth-service","timestamp":"2026-07-18 22:30:14"}
+{"level":"info","message":"http://localhost:5001","service":"auth-service","timestamp":"2026-07-18 22:30:14"}
+{"level":"info","message":"Profile fetched successfully","service":"auth-service","timestamp":"2026-07-18 22:31:45","userId":"c31a9200-0e88-471d-b54e-953008df0e34"}
+{"level":"info","message":"Profile fetched successfully","service":"auth-service","timestamp":"2026-07-18 22:37:22","userId":"c31a9200-0e88-471d-b54e-953008df0e34"}

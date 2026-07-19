@@ -493,3 +493,8 @@
 {"level":"info","message":"Login successful","service":"auth-service","timestamp":"2026-07-19 10:01:35","userId":"c31a9200-0e88-471d-b54e-953008df0e34"}
 {"level":"info","message":"Profile fetched successfully","service":"auth-service","timestamp":"2026-07-19 10:04:19","userId":"c31a9200-0e88-471d-b54e-953008df0e34"}
 {"level":"info","message":"Login successful","service":"auth-service","timestamp":"2026-07-19 10:04:41","userId":"2aeb8d49-547d-42c0-bfeb-69ee13441a52"}
+{"level":"info","message":"Login successful","service":"auth-service","timestamp":"2026-07-19 10:30:49","userId":"2aeb8d49-547d-42c0-bfeb-69ee13441a52"}
+{"level":"info","message":"Logout successful","service":"auth-service","timestamp":"2026-07-19 10:31:22"}
+{"email":"smith.fladu.1108@gmail.com","level":"warn","message":"Login attempt with non-existent email","service":"auth-service","timestamp":"2026-07-19 10:31:35"}
+{"email":"smith.fladu.1108@gmail.com","error":"Invalid email or password","level":"error","message":"Error logging in","service":"auth-service","timestamp":"2026-07-19 10:31:35"}
+{"level":"info","message":"Login successful","service":"auth-service","timestamp":"2026-07-19 10:31:42","userId":"c31a9200-0e88-471d-b54e-953008df0e34"}

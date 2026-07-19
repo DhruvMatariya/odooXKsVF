@@ -266,3 +266,12 @@ export async function retryPayment(orderId: string) {
     method: 'POST',
   });
 }
+
+export async function listOrders(params: { status?: string; page?: number; limit?: number } = {}) {
+  const q = new URLSearchParams();
+  if (params.status) q.set('status', params.status);
+  if (params.page) q.set('page', String(params.page));
+  if (params.limit) q.set('limit', String(params.limit));
+  const qs = q.toString();
+  return apiFetch(`/orders${qs ? '?' + qs : ''}`);
+}

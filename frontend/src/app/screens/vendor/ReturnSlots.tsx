@@ -50,6 +50,10 @@ export function ReturnSlots() {
     toast.success('Slot removed');
   }
 
+  // Unique sorted dates from loaded slots
+  const dates = [...new Set(slots.map(s => s.date))].sort();
+  const visibleDates = showAll ? dates : dates.slice(0, 2);
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>

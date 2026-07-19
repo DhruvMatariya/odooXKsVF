@@ -20,7 +20,7 @@ export class RazorpayProvider extends PaymentProvider {
       const rentalOrder = await this.razorpay.orders.create({
         amount: rentalFeeCents,
         currency,
-        receipt: `rental_${orderId}`,
+        receipt: `r_${orderId.replace(/-/g, '')}`,
         notes: { orderId, type: PAYMENT_TYPES.RENTAL_FEE },
       });
 
@@ -28,7 +28,7 @@ export class RazorpayProvider extends PaymentProvider {
       const depositOrder = await this.razorpay.orders.create({
         amount: depositCents,
         currency,
-        receipt: `deposit_${orderId}`,
+        receipt: `d_${orderId.replace(/-/g, '')}`,
         notes: { orderId, type: PAYMENT_TYPES.DEPOSIT },
       });
 
@@ -45,7 +45,8 @@ export class RazorpayProvider extends PaymentProvider {
         },
       };
     } catch (err) {
-      throw new PaymentProviderError(`Razorpay order creation failed: ${err.message}`, 'PAYMENT_CREATION_FAILED', { originalError: err });
+      const msg = err.message || err.error?.description || (typeof err === 'object' ? JSON.stringify(err) : String(err));
+      throw new PaymentProviderError(`Razorpay order creation failed: ${msg}`, 'PAYMENT_CREATION_FAILED', { originalError: err });
     }
   }
 

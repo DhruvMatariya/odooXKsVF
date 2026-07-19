@@ -41,8 +41,8 @@ export function AddEditProduct() {
   async function loadProduct(productId: string) {
     try {
       const res = await getProductById(productId);
-      if (res.data?.data) {
-        const p = res.data.data;
+      if (res.data) {
+        const p = res.data;
         setForm({
           name: p.name || '',
           description: p.description || '',

@@ -87,7 +87,7 @@ export function PaymentStatusDisplay({ state, onRetry, onRetryDeposit }: Payment
         </button>
       )}
 
-      <style jsx>{`
+      <style>{`
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }

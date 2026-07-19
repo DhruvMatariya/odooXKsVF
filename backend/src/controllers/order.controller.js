@@ -22,6 +22,10 @@ function toOrderResponseDTO(order) {
     actualReturnTime: order.actualReturnTime,
     createdAt: order.createdAt,
     updatedAt: order.updatedAt,
+    productName: order.productName,
+    thumbnail: order.thumbnail,
+    depositAmount: order.depositAmount,
+    customerEmail: order.customerEmail,
   };
 }
 

@@ -23,15 +23,22 @@ export function ProductListing() {
   const [transitionKey, setTransitionKey] = useState(0);
 
   const pageSize = viewMode === 'grid' ? GRID_PAGE_SIZE : LIST_PAGE_SIZE;
-  const paged = products.slice((page - 1) * pageSize, page * pageSize);
+
+  // Fallback image — shown when product has no valid thumbnail URL
+  const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=600&q=75';
+
+  function getProductImage(product: any): string {
+    if (product.thumbnail && product.thumbnail.startsWith('http')) return product.thumbnail;
+    return FALLBACK_IMAGE;
+  }
 
   useEffect(() => {
     loadCategories();
   }, []);
 
   useEffect(() => {
-    loadProducts();
-  }, [search, categoryId, sort, order, page]);
+    loadProducts(page, pageSize, search, categoryId, sort, order);
+  }, [search, categoryId, sort, order, page, pageSize]);
 
   async function loadCategories() {
     try {
@@ -42,19 +49,30 @@ export function ProductListing() {
     }
   }
 
-  async function loadProducts() {
+  // Build URL to verify correct params reach the backend
+  async function loadProducts(
+    currentPage = page,
+    currentPageSize = pageSize,
+    currentSearch = search,
+    currentCategory = categoryId,
+    currentSort = sort,
+    currentOrder = order,
+  ) {
     setLoading(true);
     try {
-      const res = await listProducts({
-        page,
-        limit: pageSize,
-        search,
-        category: categoryId,
-      });
-      if (res.data) {
-        setProducts(res.data.data || []);
-        setTotal(res.data.meta?.total || 0);
-      }
+      const params: Record<string, any> = {
+        page: currentPage,
+        limit: currentPageSize,
+      };
+      if (currentSearch) params.search = currentSearch;
+      if (currentCategory) params.category = currentCategory;
+      if (currentSort) params.sort = currentSort;
+      if (currentOrder) params.order = currentOrder;
+
+      const res: any = await listProducts(params);
+      // apiFetch returns raw JSON body: { success, data: [...], meta: {...} }
+      setProducts(Array.isArray(res.data) ? res.data : []);
+      setTotal(res.meta?.total ?? 0);
     } catch (e) {
       toast.error('Failed to load products');
     } finally {
@@ -82,16 +100,6 @@ export function ProductListing() {
 
   return (
     <div>
-      <style>{`
-        @keyframes cardFadeIn {
-          from { opacity: 0; transform: translateY(18px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes cardSlideIn {
-          from { opacity: 0; transform: translateX(-18px); }
-          to   { opacity: 1; transform: translateX(0); }
-        }
-      `}</style>
       <br></br>
       <div style={{
         background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(16px)',
@@ -103,7 +111,12 @@ export function ProductListing() {
         <div style={{ position: 'relative', flex: '1 1 200px' }}>
           <Search size={14} color="#8EA58C" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
           <input
-            value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
+            value={search} onChange={e => {
+              const v = e.target.value;
+              setSearch(v);
+              setPage(1);
+              loadProducts(1, pageSize, v, categoryId, sort, order);
+            }}
             placeholder="Search products…"
             style={{ width: '100%', padding: '9px 12px 9px 34px', borderRadius: '10px', border: '1px solid rgba(115,138,110,0.2)', fontSize: '13px', outline: 'none', boxSizing: 'border-box', background: '#FAFAF8', color: '#344C3D', transition: 'border-color 0.2s' }}
             onFocus={e => e.target.style.borderColor = '#738A6E'}
@@ -113,18 +126,34 @@ export function ProductListing() {
 
         <SlidersHorizontal size={14} color="#8EA58C" />
 
-        <select value={categoryId} onChange={e => { setCategoryId(e.target.value); setPage(1); }} style={selectStyle}>
+        <select value={categoryId} onChange={e => {
+          const v = e.target.value;
+          setCategoryId(v);
+          setPage(1);
+          loadProducts(1, pageSize, search, v, sort, order);
+        }} style={selectStyle}>
           <option value="">All categories</option>
           {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
 
-        <select value={sort} onChange={e => { setSort(e.target.value); setPage(1); }} style={selectStyle}>
+        <select value={sort} onChange={e => {
+          const v = e.target.value;
+          setSort(v);
+          setPage(1);
+          loadProducts(1, pageSize, search, categoryId, v, order);
+        }} style={selectStyle}>
           <option value="name">Sort: Name</option>
-          <option value="price">Sort: Price</option>
+          <option value="startingPrice">Sort: Price</option>
+          <option value="createdAt">Sort: Newest</option>
         </select>
 
         <button
-          onClick={() => setOrder(o => o === 'asc' ? 'desc' : 'asc')}
+          onClick={() => {
+            const newOrder = order === 'asc' ? 'desc' : 'asc';
+            setOrder(newOrder);
+            setPage(1);
+            loadProducts(1, pageSize, search, categoryId, sort, newOrder);
+          }}
           style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '8px 12px', borderRadius: '10px', border: '1px solid rgba(115,138,110,0.2)', background: '#FAFAF8', color: '#344C3D', fontSize: '13px', cursor: 'pointer', fontWeight: 600 }}
         >
           <ArrowUpDown size={13} />
@@ -166,11 +195,11 @@ export function ProductListing() {
         <EmptyState message="No products match your filters." />
       ) : viewMode === 'grid' ? (
         <div key={transitionKey} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', gridAutoRows: '1fr', marginBottom: '8px' }}>
-          {paged.map((product, idx) => {
+          {products.map((product, idx) => {
             const startingPrice = product.startingPrice || 0;
             const isUnavailable = product.inventory?.available === 0;
             return (
-              <Link key={product.id} to={`/customer/products/${product.id}`} style={{ display: 'block', height: '100%', textDecoration: 'none', animation: `cardFadeIn 0.4s ease both`, animationDelay: `${idx * 55}ms` }}>
+              <Link key={product.id} to={`/customer/products/${product.id}`} style={{ display: 'block', height: '100%', textDecoration: 'none' }}>
                 <div
                   style={{
                     display: 'flex',
@@ -197,7 +226,10 @@ export function ProductListing() {
                   }}
                 >
                   <div style={{ position: 'relative', height: '200px', overflow: 'hidden', background: '#F0F3EF' }}>
-                    <img src={product.thumbnail || ''} alt={product.name}
+                    <img
+                      src={getProductImage(product)}
+                      alt={product.name}
+                      onError={e => { (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=600&q=75'; }}
                       style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.5s ease' }}
                       onMouseEnter={e => (e.currentTarget as HTMLImageElement).style.transform = 'scale(1.08)'}
                       onMouseLeave={e => (e.currentTarget as HTMLImageElement).style.transform = 'scale(1)'}
@@ -239,7 +271,7 @@ export function ProductListing() {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '8px' }}>
-          {paged.map(product => {
+          {products.map(product => {
             const startingPrice = product.startingPrice || 0;
             const isUnavailable = product.inventory?.available === 0;
             return (
@@ -268,7 +300,11 @@ export function ProductListing() {
                   }}
                 >
                   <div style={{ position: 'relative', width: '110px', height: '90px', flexShrink: 0, overflow: 'hidden', background: '#F0F3EF' }}>
-                    <img src={product.thumbnail || ''} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.4s ease' }}
+                    <img
+                      src={getProductImage(product)}
+                      alt={product.name}
+                      onError={e => { (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=600&q=75'; }}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.4s ease' }}
                       onMouseEnter={e => (e.currentTarget as HTMLImageElement).style.transform = 'scale(1.1)'}
                       onMouseLeave={e => (e.currentTarget as HTMLImageElement).style.transform = 'scale(1)'}
                     />
@@ -311,7 +347,10 @@ export function ProductListing() {
 
       <Pagination
         meta={{ page, limit: pageSize, total, totalPages }}
-        onPageChange={p => setPage(p)}
+        onPageChange={p => {
+          setPage(p);
+          loadProducts(p, pageSize, search, categoryId, sort, order);
+        }}
       />
     </div>
   );

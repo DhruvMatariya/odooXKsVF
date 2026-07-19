@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router';
-import { ORDERS } from '../../lib/mockData';
+import { listOrders } from '../../lib/api';
 import { StatusBadge } from '../../components/shared/StatusBadge';
 import { Pagination } from '../../components/shared/Pagination';
 import type { OrderStatus } from '../../lib/types';
 import { formatDate, formatPrice } from '../../lib/utils';
 import { Plus } from 'lucide-react';
+import { toast } from 'sonner';
 
 const STATUS_FILTERS = [
   { label: 'All', value: '' },
@@ -18,22 +19,40 @@ const STATUS_FILTERS = [
   { label: 'Disputed', value: 'DISPUTED' },
 ];
 
-const PAGE_SIZE = 5;
+const PAGE_SIZE = 10;
 
 export function VendorOrders() {
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
 
-  const filtered = ORDERS.filter(o => !statusFilter || o.status === statusFilter);
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => {
+    loadOrders();
+  }, [statusFilter, page]);
+
+  async function loadOrders() {
+    setLoading(true);
+    try {
+      const res: any = await listOrders({ status: statusFilter || undefined, page, limit: PAGE_SIZE });
+      setOrders(Array.isArray(res.data) ? res.data : []);
+      setTotal(res.meta?.total || 0);
+    } catch {
+      toast.error('Failed to load orders');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
         <div>
           <h1 style={{ color: '#344C3D', fontWeight: 700, fontSize: '22px', letterSpacing: '-0.02em', marginBottom: '4px' }}>Orders</h1>
-          <p style={{ color: '#738A6E', fontSize: '14px' }}>{filtered.length} orders</p>
+          <p style={{ color: '#738A6E', fontSize: '14px' }}>{total} orders</p>
         </div>
         <Link to="/vendor/orders/new" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 16px', borderRadius: '8px', background: '#738A6E', color: '#fff', textDecoration: 'none', fontSize: '13px', fontWeight: 600 }}>
           <Plus size={15} /> Add Offline Order
@@ -55,7 +74,11 @@ export function VendorOrders() {
         ))}
       </div>
 
-      {paged.length === 0 ? (
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '64px', background: '#fff', border: '1px solid #E4E7E2', borderRadius: '10px', color: '#8EA58C' }}>
+          Loading orders...
+        </div>
+      ) : orders.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '64px', background: '#fff', border: '1px solid #E4E7E2', borderRadius: '10px', color: '#8EA58C' }}>
           No orders match this filter
         </div>
@@ -74,13 +97,13 @@ export function VendorOrders() {
               </tr>
             </thead>
             <tbody>
-              {paged.map((order, idx) => (
-                <tr key={order.id} style={{ borderBottom: idx < paged.length - 1 ? '1px solid #E4E7E2' : 'none' }}>
+              {orders.map((order, idx) => (
+                <tr key={order.id} style={{ borderBottom: idx < orders.length - 1 ? '1px solid #E4E7E2' : 'none' }}>
                   <td style={{ padding: '14px 16px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <img src={order.product.thumbnail} alt="" style={{ width: '40px', height: '32px', objectFit: 'cover', borderRadius: '4px' }} />
+                      <img src={order.product?.thumbnail || order.thumbnail || ''} alt="" style={{ width: '40px', height: '32px', objectFit: 'cover', borderRadius: '4px' }} />
                       <div>
-                        <div style={{ fontSize: '13px', fontWeight: 600, color: '#344C3D' }}>{order.product.name}</div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: '#344C3D' }}>{order.product?.name || order.productName || 'Unknown'}</div>
                         {order.customerEmail && <div style={{ fontSize: '11px', color: '#8EA58C' }}>{order.customerEmail}</div>}
                       </div>
                     </div>
@@ -95,7 +118,7 @@ export function VendorOrders() {
                   <td style={{ padding: '14px 16px', fontSize: '12px', color: '#738A6E', whiteSpace: 'nowrap' }}>
                     {formatDate(order.rentalPeriodStart)} → {formatDate(order.rentalPeriodEnd)}
                   </td>
-                  <Td>{formatPrice(order.deposit.amountHeld)}</Td>
+                  <Td>{formatPrice(order.deposit?.amountHeld ?? order.depositAmount ?? 0)}</Td>
                   <td style={{ padding: '14px 16px' }}>
                     <Link to={`/vendor/orders/${order.id}`} style={{ fontSize: '12px', color: '#738A6E', fontWeight: 600, textDecoration: 'none', padding: '5px 10px', borderRadius: '6px', border: '1px solid #E4E7E2' }}>
                       View →
@@ -108,7 +131,7 @@ export function VendorOrders() {
         </div>
       )}
 
-      <Pagination meta={{ page, limit: PAGE_SIZE, total: filtered.length, totalPages }} onPageChange={setPage} />
+      <Pagination meta={{ page, limit: PAGE_SIZE, total, totalPages }} onPageChange={setPage} />
     </div>
   );
 }

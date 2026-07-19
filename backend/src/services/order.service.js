@@ -30,6 +30,10 @@ function toOrderDTO(row) {
     actualReturnTime: row.actual_return_time,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    productName: row.product_name,
+    thumbnail: row.thumbnail,
+    depositAmount: row.deposit_amount,
+    customerEmail: row.customer_email,
   };
 }
 
@@ -59,16 +63,19 @@ export const orderService = {
   // Phase A: Create order in DB only (no payment calls)
   async createOrder(customerUserId, data, idempotencyKey) {
     const client = await pool.connect();
+    let isReleased = false;
     try {
       await client.query('BEGIN');
 
       if (idempotencyKey) {
         const existing = await client.query(
-          `SELECT response FROM idempotency_keys WHERE key = $1 AND expires_at > NOW()`,
+          `SELECT response_json as response FROM idempotency_keys WHERE key_hash = $1 AND expires_at > NOW()`,
           [idempotencyKey]
         );
         if (existing.rows.length > 0) {
           await client.query('COMMIT');
+          client.release();
+          isReleased = true;
           return existing.rows[0].response;
         }
       }
@@ -126,42 +133,49 @@ export const orderService = {
       // Phase A complete - order exists in DB with PENDING_PAYMENT
       await client.query('COMMIT');
       client.release();
+      isReleased = true;
 
       // Phase B: Initiate payment (outside transaction)
       return await this.initiatePayment(order, customerUserId, totalRentalFee, totalDeposit, idempotencyKey);
     } catch (err) {
-      await client.query('ROLLBACK');
-      client.release();
+      if (!isReleased) {
+        await client.query('ROLLBACK');
+        client.release();
+        isReleased = true;
+      }
+      try {
+        const fs = await import('fs');
+        fs.appendFileSync('error_debug.log', JSON.stringify({ msg: err.message, stack: err.stack, name: err.name }) + '\\n');
+      } catch (e) {}
       if (err instanceof ApiError) throw err;
-      throw new ApiError(HTTP_STATUS.INTERNAL_SERVER_ERROR, MESSAGES.SERVER.INTERNAL_ERROR);
+      throw err;
     }
   },
 
   // Phase B: Initiate payment after order is persisted
   async initiatePayment(order, customerUserId, totalRentalFee, totalDeposit, idempotencyKey) {
     try {
-      const rentalPayment = await paymentProvider.createRentalFeePayment({
-        amount: totalRentalFee,
-        currency: 'INR',
+      const paymentOrders = await paymentProvider.createPaymentOrders({
+        rentalFeeCents: Math.round(totalRentalFee * 100),
+        depositCents: Math.round(totalDeposit * 100),
         orderId: order.id,
-        metadata: { orderId: order.id, type: PAYMENT_TYPES.RENTAL_FEE },
+        currency: 'INR',
       });
 
-      const depositPayment = await paymentProvider.createDepositPayment({
-        amount: totalDeposit,
-        currency: 'INR',
-        orderId: order.id,
-        metadata: { orderId: order.id, type: PAYMENT_TYPES.DEPOSIT },
-      });
+      const rentalPayment = paymentOrders.rental;
+      const depositPayment = paymentOrders.deposit;
 
       const provider = env.PAYMENT_PROVIDER?.toLowerCase();
       const rentalProviderId = rentalPayment.id;
       const depositProviderId = depositPayment.id;
 
+      const rentalCents = Math.round(totalRentalFee * 100);
+      const depositCents = Math.round(totalDeposit * 100);
+
       await pool.query(
         `INSERT INTO payments (order_id, provider, provider_order_id, provider_payment_id, amount, type, status)
          VALUES ($1, $2, $3, $4, $5, 'RENTAL_FEE', 'pending'), ($1, $2, $6, $7, $8, 'DEPOSIT', 'pending')`,
-        [order.id, env.PAYMENT_PROVIDER, rentalProviderId, null, totalRentalFee, depositProviderId, null, totalDeposit]
+        [order.id, env.PAYMENT_PROVIDER, rentalProviderId, null, rentalCents, depositProviderId, null, depositCents]
       );
 
       await pool.query(
@@ -186,7 +200,7 @@ export const orderService = {
 
       if (idempotencyKey) {
         await pool.query(
-          `INSERT INTO idempotency_keys (key, response, expires_at) VALUES ($1, $2, NOW() + INTERVAL '24 hours')`,
+          `INSERT INTO idempotency_keys (key_hash, response_json, expires_at) VALUES ($1, $2, NOW() + INTERVAL '24 hours')`,
           [idempotencyKey, JSON.stringify(response)]
         );
       }
@@ -233,6 +247,7 @@ export const orderService = {
   // Retry payment for PAYMENT_FAILED orders
   async retryPayment(orderId, customerUserId) {
     const client = await pool.connect();
+    let isReleased = false;
     try {
       await client.query('BEGIN');
 
@@ -274,11 +289,15 @@ export const orderService = {
 
       await client.query('COMMIT');
       client.release();
+      isReleased = true;
 
       return await this.initiatePayment(order, customerUserId, totalRentalFee, totalDeposit, null);
     } catch (err) {
-      await client.query('ROLLBACK');
-      client.release();
+      if (!isReleased) {
+        await client.query('ROLLBACK');
+        client.release();
+        isReleased = true;
+      }
       if (err instanceof ApiError) throw err;
       throw new ApiError(HTTP_STATUS.INTERNAL_SERVER_ERROR, MESSAGES.SERVER.INTERNAL_ERROR);
     }
@@ -500,23 +519,28 @@ export const orderService = {
     let paramIndex = 2;
 
     if (userRole === 'customer') {
-      whereClause = 'WHERE customer_user_id = $1';
+      whereClause = 'WHERE o.customer_user_id = $1';
     } else {
-      whereClause = 'WHERE vendor_user_id = $1';
+      whereClause = 'WHERE o.vendor_user_id = $1';
     }
 
     if (status) {
-      whereClause += ` AND status = $${paramIndex}`;
+      whereClause += ` AND o.status = $${paramIndex}`;
       params.push(status);
       paramIndex++;
     }
 
-    const countResult = await pool.query(`SELECT COUNT(*) FROM orders ${whereClause}`, params);
+    const countResult = await pool.query(`SELECT COUNT(*) FROM orders o ${whereClause}`, params);
     const total = parseInt(countResult.rows[0].count);
 
     params.push(limit, offset);
     const ordersResult = await pool.query(
-      `SELECT * FROM orders ${whereClause} ORDER BY created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      `SELECT o.*, p.name as product_name, p.thumbnail as thumbnail, d.amount_held as deposit_amount, u.email as customer_email 
+       FROM orders o 
+       LEFT JOIN products p ON o.product_id = p.id
+       LEFT JOIN deposits d ON o.id = d.order_id
+       LEFT JOIN users u ON o.customer_user_id = u.id
+       ${whereClause} ORDER BY o.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
       params
     );
 
@@ -1003,7 +1027,7 @@ export const orderService = {
 
       if (idempotencyKey) {
         const existing = await client.query(
-          `SELECT response FROM idempotency_keys WHERE key = $1 AND expires_at > NOW()`,
+          `SELECT response_json as response FROM idempotency_keys WHERE key_hash = $1 AND expires_at > NOW()`,
           [idempotencyKey]
         );
         if (existing.rows.length > 0) {
@@ -1150,7 +1174,7 @@ export const orderService = {
 
       if (idempotencyKey) {
         await client.query(
-          `INSERT INTO idempotency_keys (key, response, expires_at) VALUES ($1, $2, NOW() + INTERVAL '24 hours')`,
+          `INSERT INTO idempotency_keys (key_hash, response_json, expires_at) VALUES ($1, $2, NOW() + INTERVAL '24 hours')`,
           [idempotencyKey, JSON.stringify(response)]
         );
       }
@@ -1317,7 +1341,7 @@ export const orderService = {
           razorpayPaymentId: paymentData.razorpayPaymentIdDeposit,
           razorpaySignature: paymentData.razorpaySignatureDeposit,
         });
-        verificationResult = { success: rentalResult.success && depositResult.success };
+        verificationResult = { success: rentalResult.verified && depositResult.verified };
       } else {
         throw new ApiError(HTTP_STATUS.BAD_REQUEST, 'Invalid payment provider', 'INVALID_PROVIDER');
       }

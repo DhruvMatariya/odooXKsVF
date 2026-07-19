@@ -12,9 +12,9 @@ export interface RazorpayCheckoutOptions {
 }
 
 export interface RazorpayCheckoutResult {
-  razorpay_payment_id: string;
-  razorpay_order_id: string;
-  razorpay_signature: string;
+  razorpayPaymentId: string;
+  razorpayOrderId: string;
+  razorpaySignature: string;
 }
 
 export interface RazorpayError {
@@ -78,8 +78,12 @@ export async function openRazorpayCheckout(
       theme: {
         color: '#738A6E',
       },
-      handler: (response: RazorpayCheckoutResult) => {
-        resolve(response);
+      handler: (response: any) => {
+        resolve({
+          razorpayPaymentId: response.razorpay_payment_id,
+          razorpayOrderId: response.razorpay_order_id,
+          razorpaySignature: response.razorpay_signature,
+        });
       },
       modal: {
         ondismiss: () => {

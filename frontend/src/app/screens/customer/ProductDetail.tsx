@@ -4,13 +4,21 @@ import { formatPrice, formatPricingLabel } from '../../lib/utils';
 import { PricingTierCard } from '../../components/shared/PricingTierCard';
 import { PaymentStatusDisplay } from '../../components/shared/PaymentStatusDisplay';
 import type { PricingTier } from '../../lib/types';
-import { ArrowLeft, X } from 'lucide-react';
-import { ChevronDown, ChevronUp, ArrowLeft, Loader2, CreditCard, AlertCircle, CheckCircle, XCircle, RotateCcw } from 'lucide-react';
+import { ArrowLeft, X, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { getProductById, createOrder, verifyPayment, retryPayment, CreateOrderData, CreateOrderResponse, VerifyPaymentData } from '../../lib/api';
-import { openRazorpayCheckout, RazorpayCheckoutResult } from '../../lib/razorpayCheckout';
+import {
+  getProductById,
+  createOrder,
+  verifyPayment,
+  retryPayment,
+} from '../../lib/api';
+import type { CreateOrderData, CreateOrderResponse, VerifyPaymentData } from '../../lib/api';
+import { openRazorpayCheckout } from '../../lib/razorpayCheckout';
+import type { RazorpayCheckoutResult } from '../../lib/razorpayCheckout';
 
-type OrderStatus = 'idle' | 'creating' | 'paying_rental' | 'verifying_rental' | 'paying_deposit' | 'verifying_deposit' | 'success' | 'partial_failure' | 'error';
+type OrderStatus =
+  | 'idle' | 'creating' | 'paying_rental' | 'verifying_rental'
+  | 'paying_deposit' | 'verifying_deposit' | 'success' | 'partial_failure' | 'error';
 
 interface PaymentResult {
   razorpayPaymentId: string;
@@ -25,6 +33,7 @@ interface OrderState {
   status: OrderStatus;
   error: string | null;
   isRetry: boolean;
+  rawOrderData: CreateOrderResponse | null;
 }
 
 export function ProductDetail() {
@@ -37,7 +46,6 @@ export function ProductDetail() {
   const [quantity, setQuantity] = useState(1);
   const [deliveryType, setDeliveryType] = useState<'PICKUP' | 'DELIVERY'>('PICKUP');
   const [termsOpen, setTermsOpen] = useState(false);
-
   const [orderState, setOrderState] = useState<OrderState>({
     orderId: null,
     rentalPayment: null,
@@ -45,51 +53,49 @@ export function ProductDetail() {
     status: 'idle',
     error: null,
     isRetry: false,
+    rawOrderData: null,
   });
 
   const isProcessing = ['creating', 'paying_rental', 'verifying_rental', 'paying_deposit', 'verifying_deposit'].includes(orderState.status);
-
-  useEffect(() => {
-    if (id) {
-      loadProduct(id);
-    }
-  }, [id]);
-
-  async function loadProduct(productId: string) {
-    setLoading(true);
-    try {
-      const res = await getProductById(productId);
-      if (res.data?.data) {
-        setProduct(res.data.data);
-        if (res.data.data.pricing && res.data.data.pricing.length > 0) {
-          setSelectedPricing(res.data.data.pricing[0]);
-        }
-      }
-    } catch (e) {
-      toast.error('Failed to load product');
-    } finally {
-      setLoading(false);
-    }
-  }
-
   const totalRental = selectedPricing ? selectedPricing.price * quantity : 0;
   const totalDeposit = selectedPricing ? selectedPricing.deposit * quantity : 0;
   const totalAmount = totalRental + totalDeposit;
 
-  const generateIdempotencyKey = useCallback(() => {
-    return `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }, []);
+  useEffect(() => { if (id) loadProduct(id); }, [id]);
+
+  async function loadProduct(productId: string) {
+    setLoading(true);
+    try {
+      const res: any = await getProductById(productId);
+      // apiFetch returns raw JSON: { success, data: {...}, message }
+      const productData = res.data || res;
+      if (productData?.id) {
+        setProduct(productData);
+        if (productData.pricing?.length > 0) setSelectedPricing(productData.pricing[0]);
+      }
+    } catch { toast.error('Failed to load product'); }
+    finally { setLoading(false); }
+  }
+
+  const generateIdempotencyKey = useCallback(() =>
+    `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, []);
+
+  function getUser() {
+    try {
+      const u = localStorage.getItem('rentsure_user');
+      return u ? JSON.parse(u) : null;
+    } catch { return null; }
+  }
+  function getCustomerName() { const u = getUser(); return u?.full_name || u?.fullName || null; }
+  function getCustomerEmail() { const u = getUser(); return u?.email || null; }
+  function getCustomerContact() { const u = getUser(); return u?.phone || u?.contact || '9999999999'; }
+  function getRazorpayKeyId() { return import.meta.env.VITE_RAZORPAY_KEY_ID || ''; }
 
   async function handleRentNow() {
-    if (!selectedPricing) {
-      toast.error('Please select a pricing tier');
-      return;
-    }
+    if (!selectedPricing) { toast.error('Please select a pricing tier'); return; }
     if (!id) return;
-
     const idempotencyKey = generateIdempotencyKey();
     setOrderState(prev => ({ ...prev, status: 'creating', error: null }));
-
     try {
       const orderData: CreateOrderData = {
         productId: id,
@@ -97,19 +103,13 @@ export function ProductDetail() {
         quantity,
         channel: 'ONLINE',
         deliveryType,
-        rentalPeriodStart: product.rentalPeriodStart || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        rentalPeriodEnd: product.rentalPeriodEnd || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        rentalPeriodStart: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        rentalPeriodEnd: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       };
-
       const response = await createOrder(orderData, idempotencyKey);
       const order = response.data!;
-
-      setOrderState(prev => ({
-        ...prev,
-        orderId: order.order.id,
-        status: 'paying_rental',
-      }));
-
+      setOrderState(prev => ({ ...prev, orderId: order.order.id, rawOrderData: order, status: 'paying_rental' }));
+      
       await processRentalPayment(order);
     } catch (error: any) {
       const message = error.message || 'Failed to create order';
@@ -122,40 +122,27 @@ export function ProductDetail() {
     const customerName = getCustomerName();
     const customerEmail = getCustomerEmail();
     const customerContact = getCustomerContact();
-
-    if (!customerName || !customerEmail || !customerContact) {
+    if (!customerName || !customerEmail) {
       toast.error('Customer information not available. Please log in again.');
       setOrderState(prev => ({ ...prev, status: 'error', error: 'Missing customer info' }));
       return;
     }
-
     try {
       const result = await openRazorpayCheckout({
         razorpayOrderId: order.razorpayOrderIdRental,
-        amount: totalRental,
-        currency: 'INR',
+        amount: Math.round(totalRental * 100), currency: 'INR',
         keyId: order.razorpayKeyId,
-        customerName,
-        customerEmail,
-        customerContact,
+        customerName, customerEmail,
+        customerContact: customerContact || '9999999999',
         description: `Rental fee for ${product.name} (${formatPricingLabel(selectedPricing!.period, selectedPricing!.duration)}) x${quantity}`,
-        orderId: order.order.id,
-        paymentType: 'RENTAL_FEE',
+        orderId: order.order.id, paymentType: 'RENTAL_FEE',
       });
-
       if (!result) {
         setOrderState(prev => ({ ...prev, status: 'error', error: 'Rental payment cancelled' }));
-        toast.error('Rental payment was cancelled');
-        return;
+        toast.error('Rental payment was cancelled'); return;
       }
-
-      setOrderState(prev => ({
-        ...prev,
-        rentalPayment: result,
-        status: 'verifying_rental',
-      }));
-
-      await verifyRentalPayment(order.order.id, result);
+      setOrderState(prev => ({ ...prev, rentalPayment: result, status: 'paying_deposit' }));
+      await processDepositPayment(order.order.id, result, order);
     } catch (error: any) {
       const message = error.message || 'Rental payment failed';
       setOrderState(prev => ({ ...prev, status: 'error', error: message }));
@@ -163,52 +150,30 @@ export function ProductDetail() {
     }
   }
 
-  async function verifyRentalPayment(orderId: string, rentalResult: PaymentResult) {
+  async function processDepositPayment(orderId: string, rentalResult: any, orderData: CreateOrderResponse) {
     try {
-      setOrderState(prev => ({ ...prev, status: 'paying_deposit' }));
-
       const depositResult = await openRazorpayCheckout({
-        razorpayOrderId: orderState.orderId!,
-        amount: totalDeposit,
-        currency: 'INR',
-        keyId: getRazorpayKeyId(),
-        customerName: getCustomerName()!,
-        customerEmail: getCustomerEmail()!,
-        customerContact: getCustomerContact()!,
+        razorpayOrderId: orderData.razorpayOrderIdDeposit, amount: Math.round(totalDeposit * 100), currency: 'INR',
+        keyId: orderData.razorpayKeyId,
+        customerName: getCustomerName()!, customerEmail: getCustomerEmail()!,
+        customerContact: getCustomerContact() || '9999999999',
         description: `Security deposit for ${product.name} (${formatPricingLabel(selectedPricing!.period, selectedPricing!.duration)}) x${quantity}`,
-        orderId,
-        paymentType: 'DEPOSIT',
+        orderId, paymentType: 'DEPOSIT',
       });
-
       if (!depositResult) {
-        setOrderState(prev => ({
-          ...prev,
-          status: 'partial_failure',
-          error: 'Deposit payment cancelled. Rental fee paid but deposit pending.',
-        }));
-        toast.error('Deposit payment cancelled. You can complete it from your orders page.');
-        return;
+        setOrderState(prev => ({ ...prev, status: 'partial_failure', error: 'Deposit payment cancelled. Rental fee paid but deposit pending.' }));
+        toast.error('Deposit payment cancelled. Complete it from your orders page.'); return;
       }
-
-      setOrderState(prev => ({
-        ...prev,
-        depositPayment: depositResult,
-        status: 'verifying_deposit',
-      }));
-
+      setOrderState(prev => ({ ...prev, depositPayment: depositResult, status: 'verifying_deposit' }));
       await verifyBothPayments(orderId, rentalResult, depositResult);
     } catch (error: any) {
       const message = error.message || 'Deposit payment failed';
-      setOrderState(prev => ({ ...prev, status: 'partial_failure', error: `Rental paid, deposit failed: ${message}` }));
-      toast.error(`Rental paid, but deposit failed: ${message}`);
+      setOrderState(prev => ({ ...prev, status: 'partial_failure', error: message }));
+      toast.error(message);
     }
   }
 
-  async function verifyBothPayments(
-    orderId: string,
-    rentalResult: PaymentResult,
-    depositResult: PaymentResult
-  ) {
+  async function verifyBothPayments(orderId: string, rentalResult: RazorpayCheckoutResult, depositResult: RazorpayCheckoutResult) {
     const verifyData: VerifyPaymentData = {
       provider: 'razorpay',
       razorpayOrderIdRental: rentalResult.razorpayOrderId,
@@ -218,43 +183,25 @@ export function ProductDetail() {
       razorpayPaymentIdDeposit: depositResult.razorpayPaymentId,
       razorpaySignatureDeposit: depositResult.razorpaySignature,
     };
-
     try {
       await verifyPayment(orderId, verifyData);
-
       setOrderState(prev => ({ ...prev, status: 'success' }));
       toast.success('Order confirmed! Payment completed successfully.');
-
-      setTimeout(() => {
-        navigate(`/customer/orders/${orderId}`);
-      }, 1500);
+      setTimeout(() => navigate(`/customer/orders/${orderId}`), 1500);
     } catch (error: any) {
       const message = error.message || 'Payment verification failed';
-      setOrderState(prev => ({
-        ...prev,
-        status: 'partial_failure',
-        error: `Payments captured but verification failed: ${message}`,
-      }));
-      toast.error(`Payments captured but verification failed: ${message}. Please contact support.`);
+      setOrderState(prev => ({ ...prev, status: 'partial_failure', error: `Payments captured but verification failed: ${message}` }));
+      toast.error('Payments captured but verification failed. Please contact support.');
     }
   }
 
   async function handleRetryPayment() {
     if (!orderState.orderId) return;
-
     setOrderState(prev => ({ ...prev, status: 'creating', error: null, isRetry: true }));
-
     try {
       const response = await retryPayment(orderState.orderId);
       const order = response.data!;
-
-      setOrderState(prev => ({
-        ...prev,
-        status: 'paying_rental',
-        rentalPayment: null,
-        depositPayment: null,
-      }));
-
+      setOrderState(prev => ({ ...prev, rawOrderData: order, status: 'paying_rental', rentalPayment: null, depositPayment: null }));
       await processRentalPayment(order);
     } catch (error: any) {
       const message = error.message || 'Failed to retry payment';
@@ -264,79 +211,9 @@ export function ProductDetail() {
   }
 
   async function handleRetryDepositOnly() {
-    if (!orderState.orderId || !orderState.rentalPayment) return;
-
+    if (!orderState.orderId || !orderState.rentalPayment || !orderState.rawOrderData) return;
     setOrderState(prev => ({ ...prev, status: 'paying_deposit', error: null }));
-
-    try {
-      const depositResult = await openRazorpayCheckout({
-        razorpayOrderId: orderState.orderId,
-        amount: totalDeposit,
-        currency: 'INR',
-        keyId: getRazorpayKeyId()!,
-        customerName: getCustomerName()!,
-        customerEmail: getCustomerEmail()!,
-        customerContact: getCustomerContact()!,
-        description: `Security deposit for ${product.name} (${formatPricingLabel(selectedPricing!.period, selectedPricing!.duration)}) x${quantity}`,
-        orderId: orderState.orderId,
-        paymentType: 'DEPOSIT',
-      });
-
-      if (!depositResult) {
-        setOrderState(prev => ({ ...prev, status: 'partial_failure', error: 'Deposit payment cancelled' }));
-        toast.error('Deposit payment cancelled');
-        return;
-      }
-
-      setOrderState(prev => ({
-        ...prev,
-        depositPayment: depositResult,
-        status: 'verifying_deposit',
-      }));
-
-      await verifyBothPayments(orderState.orderId, orderState.rentalPayment, depositResult);
-    } catch (error: any) {
-      const message = error.message || 'Deposit payment failed';
-      setOrderState(prev => ({ ...prev, status: 'partial_failure', error: message }));
-      toast.error(message);
-    }
-  }
-
-  function getCustomerName(): string | null {
-    try {
-      const userStr = localStorage.getItem('rentsure_user');
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        return user.full_name || user.fullName || null;
-      }
-    } catch {}
-    return null;
-  }
-
-  function getCustomerEmail(): string | null {
-    try {
-      const userStr = localStorage.getItem('rentsure_user');
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        return user.email || null;
-      }
-    } catch {}
-    return null;
-  }
-
-  function getCustomerContact(): string | null {
-    try {
-      const userStr = localStorage.getItem('rentsure_user');
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        return user.phone || user.contact || null;
-      }
-    } catch {}
-    return null;
-  }
-
-  function getRazorpayKeyId(): string | null {
-    return import.meta.env.VITE_RAZORPAY_KEY_ID || null;
+    await processDepositPayment(orderState.orderId, orderState.rentalPayment, orderState.rawOrderData);
   }
 
   if (loading) {
@@ -356,46 +233,40 @@ export function ProductDetail() {
     );
   }
 
-  const allImages = product.images && product.images.length > 0 ? product.images : [product.thumbnail];
+  const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=800&q=80';
 
-  const totalRental = selectedPricing ? selectedPricing.price * quantity : 0;
-  const totalDeposit = selectedPricing ? selectedPricing.deposit * quantity : 0;
-  const totalAmount = totalRental + totalDeposit;
+  const allImages = (() => {
+    const imgs = product.images?.filter((u: string) => u && u.startsWith('http'));
+    if (imgs?.length > 0) return imgs;
+    if (product.thumbnail && product.thumbnail.startsWith('http')) return [product.thumbnail];
+    return [FALLBACK_IMAGE];
+  })();
+  const available = product.inventory?.available || 0;
+  const isOutOfStock = available === 0;
 
-  function handleRentNow() {
-    if (!selectedPricing) {
-      toast.error('Please select a pricing tier');
-      return;
-    }
-    toast.success('Order placed! Redirecting to orders…');
-    navigate('/customer/orders');
-  }
-
-  const allImages = product.images && product.images.length > 0 ? product.images : [product.thumbnail];
+  function getFallbackImage(): string { return FALLBACK_IMAGE; }
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-      <button onClick={() => navigate(-1)} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#738A6E', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', marginBottom: '20px', padding: 0 }}>
+      <button
+        onClick={() => navigate(-1)}
+        style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#738A6E', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', marginBottom: '20px', padding: 0 }}
+      >
         <ArrowLeft size={15} /> Back to products
       </button>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '24px', alignItems: 'flex-start' }}>
+        {/* Left column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Image gallery */}
           <div style={{ background: '#fff', border: '1px solid #E4E7E2', borderRadius: '18px', overflow: 'hidden' }}>
-            <div style={{ position: 'relative', height: '420px', overflow: 'hidden', background: '#F0F3EF' }}>
-              <img src={allImages[selectedImage] || product.thumbnail} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <div style={{ height: '420px', overflow: 'hidden', background: '#F0F3EF' }}>
+              <img src={allImages[selectedImage] || FALLBACK_IMAGE} alt={product.name} onError={e => { (e.currentTarget as HTMLImageElement).src = FALLBACK_IMAGE; }} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
             {allImages.length > 1 && (
               <div style={{ display: 'flex', gap: '8px', padding: '16px', overflowX: 'auto' }}>
                 {allImages.map((url: string, index: number) => (
-                  <button
-                    key={index}
-                    onClick={() => setSelectedImage(index)}
-                    style={{
-                      flexShrink: 0, width: '80px', height: '60px', borderRadius: '8px',
-                      border: selectedImage === index ? '2px solid #738A6E' : '1px solid #E4E7E2',
-                      padding: 0, cursor: 'pointer', overflow: 'hidden'
-                    }}>
+                  <button key={index} onClick={() => setSelectedImage(index)} style={{ flexShrink: 0, width: '80px', height: '60px', borderRadius: '8px', border: selectedImage === index ? '2px solid #738A6E' : '1px solid #E4E7E2', padding: 0, cursor: 'pointer', overflow: 'hidden' }}>
                     <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   </button>
                 ))}
@@ -403,26 +274,27 @@ export function ProductDetail() {
             )}
           </div>
 
+          {/* Product info */}
           <div style={{ background: '#fff', border: '1px solid #E4E7E2', borderRadius: '18px', padding: '20px' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', marginBottom: '16px' }}>
-              <div>
-                <div style={{ fontSize: '11px', fontWeight: 600, color: '#8EA58C', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>Product details</div>
-                <div style={{ fontSize: '22px', fontWeight: 700, color: '#344C3D', marginBottom: '4px' }}>{product.name}</div>
-                {product.brand && (
-                  <div style={{ fontSize: '13px', color: '#738A6E', marginBottom: '8px' }}>{product.brand} {product.manufacturer ? '· ' + product.manufacturer : ''}</div>
-                )}
-              </div>
-            </div>
+            <div style={{ fontSize: '11px', fontWeight: 600, color: '#8EA58C', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>Product details</div>
+            <div style={{ fontSize: '22px', fontWeight: 700, color: '#344C3D', marginBottom: '4px' }}>{product.name}</div>
+            {product.brand && (
+              <div style={{ fontSize: '13px', color: '#738A6E', marginBottom: '12px' }}>{product.brand}{product.manufacturer ? ' · ' + product.manufacturer : ''}</div>
+            )}
             <div style={{ fontSize: '14px', color: '#344C3D', lineHeight: '1.6' }}>
               {product.description || 'No description available.'}
             </div>
           </div>
 
-          {product.lateFeeRule || product.cancellationPolicy ? (
+          {/* Rental policies */}
+          {(product.lateFeeRule || product.cancellationPolicy) && (
             <div style={{ background: '#fff', border: '1px solid #E4E7E2', borderRadius: '18px', padding: '20px' }}>
-              <button onClick={() => setTermsOpen(!termsOpen)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600, color: '#344C3D' }}>
-                Rental policies
-                {termsOpen ? <X size={16} /> : <span style={{ fontSize: '18px', lineHeight: 1 }}>›</span>}
+              <button
+                onClick={() => setTermsOpen(o => !o)}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600, color: '#344C3D' }}
+              >
+                Rental Policies
+                {termsOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
               </button>
               {termsOpen && (
                 <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -438,118 +310,85 @@ export function ProductDetail() {
                     <div>
                       <div style={{ fontSize: '11px', fontWeight: 600, color: '#8EA58C', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>Cancellations</div>
                       <div style={{ fontSize: '14px', color: '#344C3D' }}>
-                        Full refund if cancelled {product.cancellationPolicy.fullRefundHoursBefore}hr+ before start, {product.cancellationPolicy.partialRefundPercent}% refund if {product.cancellationPolicy.partialRefundHoursBefore}hr+ before, no refund otherwise.
+                        Full refund if cancelled {product.cancellationPolicy.fullRefundHoursBefore}hr+ before start. {product.cancellationPolicy.partialRefundPercent}% refund if {product.cancellationPolicy.partialRefundHoursBefore}hr+ before, no refund otherwise.
                       </div>
                     </div>
                   )}
                 </div>
               )}
             </div>
-          ) : null}
-          {/* Rental Terms collapsible */}
-          <div style={{ border: '1px solid #E4E7E2', borderRadius: '8px', overflow: 'hidden', marginBottom: '24px' }}>
-            <button onClick={() => setTermsOpen(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#F0F3EF', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '13px', color: '#344C3D' }}>
-              Rental Terms
-              {termsOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            </button>
-            {termsOpen && (
-              <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <div>
-                  <div style={{ fontSize: '11px', fontWeight: 600, color: '#8EA58C', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>Late Fee Rule</div>
-                  <TermRow label="Grace period" value={`${product.lateFeeRule.gracePeriodHours} hours`} />
-                  <TermRow label="Rate type" value={product.lateFeeRule.rateType} />
-                  <TermRow label="Rate" value={formatPrice(product.lateFeeRule.rateAmount) + '/unit'} />
-                  <TermRow label="Max cap" value={formatPrice(product.lateFeeRule.maxCap)} />
-                </div>
-                <div>
-                  <div style={{ fontSize: '11px', fontWeight: 600, color: '#8EA58C', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>Cancellation Policy</div>
-                  <TermRow label="Full refund if cancelled" value={`${product.cancellationPolicy.fullRefundHoursBefore}h before`} />
-                  <TermRow label="Partial refund if cancelled" value={`${product.cancellationPolicy.partialRefundHoursBefore}h before`} />
-                  <TermRow label="Partial refund %" value={`${product.cancellationPolicy.partialRefundPercent}%`} />
-                </div>
-              </div>
-            )}
-          </div>
+          )}
 
-          {/* Payment Status Display */}
+          {/* Payment status */}
           {orderState.status !== 'idle' && (
-            <div style={{ marginTop: '24px', padding: '16px', borderRadius: '8px', border: '1px solid #E4E7E2', background: '#FAFAF8' }}>
+            <div style={{ padding: '16px', borderRadius: '12px', border: '1px solid #E4E7E2', background: '#FAFAF8' }}>
               <h3 style={{ fontSize: '13px', fontWeight: 600, color: '#344C3D', marginBottom: '12px' }}>Payment Status</h3>
               <PaymentStatusDisplay state={orderState} onRetry={handleRetryPayment} onRetryDeposit={handleRetryDepositOnly} />
             </div>
           )}
         </div>
 
+        {/* Right column — booking card */}
         <div style={{ position: 'sticky', top: '24px' }}>
           <div style={{ background: '#fff', border: '1px solid #E4E7E2', borderRadius: '18px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-              <div>
-                <div style={{ fontSize: '11px', fontWeight: 600, color: '#8EA58C', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>Rental from</div>
-                <div style={{ fontSize: '26px', fontWeight: 800, color: '#344C3D' }}>
-                  {selectedPricing ? formatPrice(selectedPricing.price) : '—'}
-                </div>
+            {/* Price */}
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: '#8EA58C', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>Rental from</div>
+              <div style={{ fontSize: '26px', fontWeight: 800, color: '#344C3D' }}>
+                {selectedPricing ? formatPrice(selectedPricing.price) : '—'}
               </div>
             </div>
 
+            {/* Availability */}
             <div style={{ padding: '12px', borderRadius: '10px', background: '#F0F3EF', border: '1px solid #E4E7E2' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: '13px', fontWeight: 500, color: '#344C3D' }}>Available</span>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: product.inventory?.available > 0 ? '#738A6E' : '#C97B3D' }}>
-                  {product.inventory?.available || 0} units
+                <span style={{ fontSize: '13px', fontWeight: 700, color: available > 0 ? '#738A6E' : '#C97B3D' }}>
+                  {available} units
                 </span>
               </div>
             </div>
 
+            {/* Pricing tiers */}
             <div>
               <div style={{ fontSize: '11px', fontWeight: 600, color: '#8EA58C', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '12px' }}>Select duration</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {product.pricing?.map((p: PricingTier) => (
-                  <PricingTierCard key={p.id} tier={p} selected={selectedPricing?.id === p.id} onSelect={() => setSelectedPricing(p)} />
+                  <PricingTierCard key={p.id} pricing={p} selected={selectedPricing?.id === p.id} onSelect={() => setSelectedPricing(p)} />
                 ))}
               </div>
             </div>
-                <div style={{ fontSize: '12px', fontWeight: 600, color: '#344C3D', marginBottom: '8px' }}>Quantity</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <button onClick={() => setQuantity(q => Math.max(1, q - 1))} disabled={isProcessing} style={{ width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #E4E7E2', background: '#fff', cursor: isProcessing ? 'not-allowed' : 'pointer', fontSize: '16px', color: '#344C3D', opacity: isProcessing ? 0.5 : 1 }}>−</button>
-                  <span style={{ fontWeight: 600, color: '#344C3D', minWidth: '24px', textAlign: 'center' }}>{quantity}</span>
-                  <button onClick={() => setQuantity(q => Math.min(product.inventory.available, q + 1))} disabled={isProcessing} style={{ width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #E4E7E2', background: '#fff', cursor: isProcessing ? 'not-allowed' : 'pointer', fontSize: '16px', color: '#344C3D', opacity: isProcessing ? 0.5 : 1 }}>+</button>
-                </div>
-              </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-              <div>
-                <div style={{ fontSize: '11px', fontWeight: 600, color: '#8EA58C', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>Qty</div>
-                <select value={quantity} onChange={e => setQuantity(parseInt(e.target.value))} style={{ width: '100%', padding: '9px 12px', borderRadius: '10px', border: '1px solid #E4E7E2', fontSize: '13px', outline: 'none', background: '#fff' }}>
-                  {[1, 2, 3, 4, 5].map(n => (
-                    <option key={n} value={n}>{n}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <div style={{ fontSize: '11px', fontWeight: 600, color: '#8EA58C', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>Delivery</div>
-                <select value={deliveryType} onChange={e => setDeliveryType(e.target.value as any)} style={{ width: '100%', padding: '9px 12px', borderRadius: '10px', border: '1px solid #E4E7E2', fontSize: '13px', outline: 'none', background: '#fff' }}>
-                  <option value="PICKUP">Pickup</option>
-                  <option value="DELIVERY">Delivery</option>
-                </select>
+            {/* Quantity */}
+            <div>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: '#344C3D', marginBottom: '8px' }}>Quantity</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <button onClick={() => setQuantity(q => Math.max(1, q - 1))} disabled={isProcessing} style={{ width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #E4E7E2', background: '#fff', cursor: isProcessing ? 'not-allowed' : 'pointer', fontSize: '16px', color: '#344C3D', opacity: isProcessing ? 0.5 : 1 }}>−</button>
+                <span style={{ fontWeight: 600, color: '#344C3D', minWidth: '24px', textAlign: 'center' }}>{quantity}</span>
+                <button onClick={() => setQuantity(q => Math.min(available, q + 1))} disabled={isProcessing} style={{ width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #E4E7E2', background: '#fff', cursor: isProcessing ? 'not-allowed' : 'pointer', fontSize: '16px', color: '#344C3D', opacity: isProcessing ? 0.5 : 1 }}>+</button>
               </div>
             </div>
-                <div style={{ fontSize: '12px', fontWeight: 600, color: '#344C3D', marginBottom: '8px' }}>Delivery Type</div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  {(['PICKUP', 'DELIVERY'] as const).map(dt => (
-                    <button key={dt} onClick={() => setDeliveryType(dt)} disabled={isProcessing} style={{ flex: 1, padding: '7px', borderRadius: '6px', border: `1px solid ${deliveryType === dt ? '#738A6E' : '#E4E7E2'}`, background: deliveryType === dt ? 'rgba(115,138,110,0.08)' : '#fff', color: deliveryType === dt ? '#344C3D' : '#8EA58C', fontWeight: deliveryType === dt ? 600 : 400, fontSize: '13px', cursor: isProcessing ? 'not-allowed' : 'pointer', opacity: isProcessing ? 0.5 : 1 }}>
-                      {dt === 'PICKUP' ? 'Pickup' : 'Delivery'}
-                    </button>
-                  ))}
-                </div>
-              </div>
 
-            <div style={{ borderTop: '1px solid #E4E7E2', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {/* Delivery type */}
+            <div>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: '#344C3D', marginBottom: '8px' }}>Delivery Type</div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {(['PICKUP', 'DELIVERY'] as const).map(dt => (
+                  <button key={dt} onClick={() => setDeliveryType(dt)} disabled={isProcessing} style={{ flex: 1, padding: '7px', borderRadius: '6px', border: `1px solid ${deliveryType === dt ? '#738A6E' : '#E4E7E2'}`, background: deliveryType === dt ? 'rgba(115,138,110,0.08)' : '#fff', color: deliveryType === dt ? '#344C3D' : '#8EA58C', fontWeight: deliveryType === dt ? 600 : 400, fontSize: '13px', cursor: isProcessing ? 'not-allowed' : 'pointer', opacity: isProcessing ? 0.5 : 1 }}>
+                    {dt === 'PICKUP' ? 'Pickup' : 'Delivery'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Price breakdown */}
+            <div style={{ borderTop: '1px solid #E4E7E2', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '13px', color: '#344C3D' }}>Rental ({quantity}× {selectedPricing ? formatPricingLabel(selectedPricing.period, selectedPricing.duration) : ''})</span>
                 <span style={{ fontSize: '14px', fontWeight: 600, color: '#344C3D' }}>{formatPrice(totalRental)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '13px', color: '#344C3D' }}>Deposit</span>
+                <span style={{ fontSize: '13px', color: '#344C3D' }}>Security Deposit</span>
                 <span style={{ fontSize: '14px', fontWeight: 600, color: '#344C3D' }}>{formatPrice(totalDeposit)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid #E4E7E2' }}>
@@ -558,75 +397,24 @@ export function ProductDetail() {
               </div>
             </div>
 
-<button
-                onClick={handleRentNow} disabled={!selectedPricing || (product.inventory?.available || 0) < quantity} style={{
-                  width: '100%', padding: '11px 16px', borderRadius: '12px', border: 'none', background: !selectedPricing || (product.inventory?.available || 0) < quantity ? '#A9C2A4' : '#738A6E', color: '#fff', fontSize: '14px', fontWeight: 700, cursor: selectedPricing && (product.inventory?.available || 0) >= quantity ? 'pointer' : 'not-allowed' }}>
-              Rent now
+            {/* Rent Now */}
+            <button
+              onClick={handleRentNow}
+              disabled={isOutOfStock || !selectedPricing || isProcessing}
+              style={{ width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: isOutOfStock || !selectedPricing || isProcessing ? '#A9C2A4' : '#738A6E', color: '#fff', fontWeight: 700, fontSize: '15px', cursor: isOutOfStock || !selectedPricing || isProcessing ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+            >
+              {isProcessing && <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />}
+              {isOutOfStock ? 'Out of Stock' : !selectedPricing ? 'Select a tier' : isProcessing ? 'Processing…' : 'Rent Now'}
             </button>
 
             <div style={{ fontSize: '11px', color: '#8EA58C', textAlign: 'center', lineHeight: '1.4' }}>
-              Security deposit is refundable upon return in good condition.
-              <button
-                onClick={handleRentNow}
-                disabled={product.inventory.available === 0 || !selectedPricing || isProcessing}
-                style={{
-                  width: '100%',
-                  padding: '11px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  background: product.inventory.available === 0 || !selectedPricing || isProcessing ? '#A9C2A4' : '#738A6E',
-                  color: '#fff',
-                  fontWeight: 700,
-                  fontSize: '15px',
-                  cursor: product.inventory.available === 0 || !selectedPricing || isProcessing ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                }}
-              >
-                {isProcessing && <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />}
-                {product.inventory.available === 0 ? 'Out of Stock' : !selectedPricing ? 'Select a tier' : isProcessing ? 'Processing…' : 'Rent Now'}
-              </button>
+              Security deposit is fully refundable upon return in good condition.
             </div>
           </div>
         </div>
       </div>
 
-      <style jsx>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
-    </div>
-  );
-}
-
-
-function InfoItem({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
-  return (
-    <div>
-      <div style={{ fontSize: '11px', color: '#8EA58C', marginBottom: '2px' }}>{label}</div>
-      <div style={{ fontSize: '13px', fontWeight: 600, color: highlight ? '#C97B3D' : '#344C3D' }}>{value}</div>
-    </div>
-  );
-}
-
-function TermRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
-      <span style={{ color: '#8EA58C' }}>{label}</span>
-      <span style={{ color: '#344C3D', fontWeight: 500 }}>{value}</span>
-    </div>
-  );
-}
-
-function SummaryRow({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-      <span style={{ color: muted ? '#8EA58C' : '#738A6E' }}>{label}</span>
-      <span style={{ color: muted ? '#8EA58C' : '#344C3D', fontWeight: 500 }}>{value}</span>
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

@@ -23,10 +23,10 @@ export function ProductList() {
   async function loadProducts() {
     setLoading(true);
     try {
-      const res = await listProducts({ page, limit: PAGE_SIZE, vendorId: user?.id });
-      if (res.data?.data) {
-        setProducts(res.data.data || []);
-        setTotal(res.data.meta?.total || 0);
+      const res: any = await listProducts({ page, limit: PAGE_SIZE, vendorId: user?.id });
+      if (res.data) {
+        setProducts(res.data || []);
+        setTotal(res.meta?.total || 0);
       }
     } catch (e) {
       toast.error('Failed to load products');

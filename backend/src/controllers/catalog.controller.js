@@ -69,7 +69,7 @@ export const catalogController = {
     res.status(HTTP_STATUS.OK).json({
       success: true,
       message: MESSAGES.CATALOG.PRODUCT_FETCHED,
-      data: formatProductResponse(product),
+      data: product,
     });
   },
 
